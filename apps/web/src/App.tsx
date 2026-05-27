@@ -18,6 +18,7 @@ import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
 import { Gallery } from './pages/Gallery';
 import { ContentPage } from './pages/ContentPage';
+import { History } from './pages/History';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="stats" element={<Stats />} />
         <Route path="training" element={<Training />} />
         <Route path="gallery" element={<Gallery />} />
+        <Route path="page/history" element={<History />} />
         <Route path="page/:slug" element={<ContentPage />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
