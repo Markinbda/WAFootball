@@ -162,9 +162,8 @@ export function Register() {
                 <span className="text-gold transition group-open:rotate-180">▾</span>
               </summary>
               <p className="mt-3 text-sm text-slate-700">
-                Yes. Once accepted you'll get access in the TeamO app — My Profile → Edit
-                Information lets you update details, add another guardian, or add a child's
-                phone/email.
+                Yes. Once accepted you can log in to your Warwick FA account and update your
+                details, add another guardian, or add a child's phone/email at any time.
               </p>
             </details>
             <details className="card group p-5">

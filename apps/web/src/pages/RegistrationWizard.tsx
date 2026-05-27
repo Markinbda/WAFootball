@@ -159,7 +159,7 @@ export function RegistrationWizard() {
 
   const validateStep = (): string | null => {
     if (type === '') return 'Please choose Adult or Junior.';
-    if (step === 1 && !agreedTerms) return 'You must accept the Teamo / Sportplan T&Cs to continue.';
+    if (step === 1 && !agreedTerms) return 'You must accept the Warwick FA Terms & Conditions to continue.';
     if (type === 'adult') {
       // Step 2 = my details (adult uses player[0])
       if (step === 2) {
@@ -335,13 +335,13 @@ export function RegistrationWizard() {
             <div>
               <h2 className="text-2xl text-navy">Warwick Football Academy</h2>
               <p className="mt-3 text-sm text-slate-700">
-                Warwick FA uses Teamo for our club database and communications hub. Teamo
-                provides clubs and teams a secure database, managed email system and
-                interactive app for team management and more.
+                Warwick FA manages its own club database and communications. All match,
+                training and club emails are sent directly from Warwick FA — there are no
+                third-party platforms involved.
               </p>
               <p className="mt-3 text-sm text-slate-700">
-                Before registering with Warwick Football Academy, you must agree to the
-                Teamo, Sportplan Ltd Terms &amp; Conditions and our Privacy Policy.
+                Before registering with Warwick Football Academy, you must agree to our
+                Terms &amp; Conditions and Privacy Policy.
               </p>
               <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
                 <input
@@ -351,8 +351,8 @@ export function RegistrationWizard() {
                   className="mt-1 h-5 w-5 rounded border-slate-400 text-navy focus:ring-navy"
                 />
                 <span className="text-sm text-slate-700">
-                  I have read and agree to Teamo's <strong className="text-navy">T&amp;Cs</strong> and the
-                  WFA <strong className="text-navy">Privacy Policy</strong>.
+                  I have read and agree to the WFA <strong className="text-navy">Terms &amp; Conditions</strong>{' '}
+                  and <strong className="text-navy">Privacy Policy</strong>.
                 </span>
               </label>
             </div>

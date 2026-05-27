@@ -109,7 +109,7 @@ export const PAGES: Record<string, PageContent> = {
       },
       {
         heading: 'What if it rains?',
-        paragraphs: ['Field closures and weather cancellations are posted on the Field Closures page and pushed via Teamo to registered families.'],
+        paragraphs: ['Field closures and weather cancellations are posted on the Field Closures page and emailed directly to registered families.'],
       },
       {
         heading: 'Can my child try a session first?',
@@ -281,7 +281,7 @@ export const PAGES: Record<string, PageContent> = {
     sections: [
       {
         paragraphs: [
-          'In the event of bad weather, training and match cancellations are posted here and pushed to families via Teamo. When in doubt, check before travelling.',
+          'In the event of bad weather, training and match cancellations are posted here and emailed directly to families. When in doubt, check before travelling.',
         ],
       },
       {
