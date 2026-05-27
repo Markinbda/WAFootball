@@ -29,16 +29,34 @@ export function TeamDetail() {
 
   return (
     <>
-      <section className="bg-navy text-white">
-        <div className="container-page py-16">
+      <section className="relative overflow-hidden bg-navy text-white">
+        {team.photoUrl && (
+          <img
+            src={team.photoUrl}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full object-cover opacity-30"
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-navy via-navy/90 to-navy/40" />
+        <div className="container-page relative py-14">
           <div className="text-xs font-semibold uppercase tracking-widest text-gold">
             {team.ageGroup}
           </div>
           <h1 className="mt-2 text-5xl text-white">{team.name}</h1>
           <p className="mt-3 max-w-2xl text-white/80">{team.blurb}</p>
-          <p className="mt-4 text-sm text-white/70">
-            Coach: <span className="text-gold">{team.coach}</span>
-          </p>
+          <div className="mt-5 flex items-center gap-3">
+            <img
+              src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(team.coach)}&backgroundType=gradientLinear&backgroundColor=FFC72C,00186C`}
+              alt=""
+              aria-hidden
+              className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
+            />
+            <div className="text-sm">
+              <span className="text-white/70">Coach:</span>{' '}
+              <span className="font-semibold text-gold">{team.coach}</span>
+            </div>
+          </div>
         </div>
       </section>
 

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { usePlayers, type Player } from '@/data/phase3';
 import { useAuth } from '@/auth/AuthProvider';
@@ -15,46 +14,40 @@ export function PlayerRoster({ teamId }: { teamId: string | undefined }) {
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {visible.map((p) => <PlayerCard key={p.id} player={p} />)}
     </div>
   );
 }
 
 function PlayerCard({ player }: { player: Player }) {
-  const [hover, setHover] = useState(false);
   return (
     <Link
       to={`/players/${player.id}`}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
       className="card overflow-hidden block transition-transform hover:-translate-y-0.5"
     >
       <div className="relative aspect-square bg-gradient-to-br from-navy via-navy-600 to-navy-500">
         {player.photo_url ? (
           <img src={player.photo_url} alt={player.full_name} className="h-full w-full object-cover" />
         ) : (
-          <div className="grid h-full w-full place-items-center font-display text-7xl text-white/40">
+          <div className="grid h-full w-full place-items-center font-display text-4xl text-white/40">
             {player.full_name.split(' ').map((s) => s[0]).slice(0, 2).join('')}
           </div>
         )}
         {player.squad_number != null && (
-          <div className="absolute right-3 top-3 grid h-10 w-10 place-items-center rounded-full bg-gold font-display text-xl text-navy shadow-md">
+          <div className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-gold font-display text-sm text-navy shadow-md">
             {player.squad_number}
           </div>
         )}
         {!player.active && (
-          <div className="absolute left-3 top-3 rounded bg-slate-900/70 px-2 py-1 text-xs font-semibold uppercase text-white">
+          <div className="absolute left-1.5 top-1.5 rounded bg-slate-900/70 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
             Inactive
           </div>
         )}
       </div>
-      <div className="p-4">
-        <h4 className="font-display text-lg leading-tight text-navy">{player.full_name}</h4>
-        <p className="text-xs uppercase tracking-wider text-slate-500">{player.position ?? '—'}</p>
-        {player.bio && hover && (
-          <p className="mt-2 text-xs text-slate-600 line-clamp-3">{player.bio}</p>
-        )}
+      <div className="px-2 py-1.5">
+        <h4 className="truncate font-display text-sm leading-tight text-navy">{player.full_name}</h4>
+        <p className="truncate text-[10px] uppercase tracking-wider text-slate-500">{player.position ?? '—'}</p>
       </div>
     </Link>
   );

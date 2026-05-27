@@ -5,6 +5,7 @@ export type Team = {
   ageGroup: string;
   coach: string;
   blurb: string;
+  photoUrl?: string | null;
 };
 
 export const TEAMS: Team[] = [
