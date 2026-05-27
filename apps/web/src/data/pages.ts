@@ -5,6 +5,7 @@ export type PageSection = {
   heading?: string;
   paragraphs?: string[];
   bullets?: string[];
+  cta?: { label: string; href: string; external?: boolean };
 };
 
 export type PageContent = {
@@ -96,7 +97,12 @@ export const PAGES: Record<string, PageContent> = {
     sections: [
       {
         heading: 'How do I register my child?',
-        paragraphs: ['Head to the Membership page or our Contact form and a coordinator will get back to you within 48 hours.'],
+        paragraphs: ['Use our online registration form and a coordinator will follow up within 48 hours.'],
+        cta: {
+          label: 'Register Now',
+          href: 'https://www.warwickfootball.bm/registration',
+          external: true,
+        },
       },
       {
         heading: 'What does it cost?',
@@ -246,11 +252,16 @@ export const PAGES: Record<string, PageContent> = {
         paragraphs: [
           'Registration for the current season is open. Spaces are limited in some age groups so register early.',
         ],
+        cta: {
+          label: 'Register Now',
+          href: 'https://www.warwickfootball.bm/registration',
+          external: true,
+        },
       },
       {
         heading: 'How to join',
         bullets: [
-          'Complete the Contact form on this site, or',
+          'Complete the online registration form, or',
           'Email the registrar (see Contact page), or',
           'Speak to any coach on a training night.',
         ],

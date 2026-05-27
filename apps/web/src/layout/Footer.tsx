@@ -26,7 +26,16 @@ export function Footer() {
         <div>
           <h4 className="text-sm font-semibold text-gold">Get Involved</h4>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
-            <li>Registration</li>
+            <li>
+              <a
+                href="https://www.warwickfootball.bm/registration"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-white/80 hover:text-gold"
+              >
+                Registration
+              </a>
+            </li>
             <li>Trials</li>
             <li>Volunteer</li>
             <li>Contact</li>

@@ -33,6 +33,14 @@ export function Home() {
               Mini Soccer to the Men's First Team.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
+              <a
+                href="https://www.warwickfootball.bm/registration"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary"
+              >
+                Register Now
+              </a>
               <Link to="/teams" className="btn-secondary">View Teams</Link>
               <Link to="/fixtures" className="btn-ghost !text-white hover:!bg-white/10">
                 Upcoming Fixtures
@@ -95,9 +103,14 @@ export function Home() {
           <p className="mt-2 text-slate-700">
             2026/27 registration is open for all age groups, U7 through senior.
           </p>
-          <Link to="/contact" className="btn-primary mt-4">
-            Register Interest
-          </Link>
+          <a
+            href="https://www.warwickfootball.bm/registration"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary mt-4 inline-block"
+          >
+            Register Now
+          </a>
         </div>
       </section>
 

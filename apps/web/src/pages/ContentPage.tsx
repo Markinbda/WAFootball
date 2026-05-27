@@ -41,6 +41,22 @@ export function ContentPage() {
                   ))}
                 </ul>
               )}
+              {s.cta && (
+                s.cta.external ? (
+                  <a
+                    href={s.cta.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn-primary mt-4 inline-block"
+                  >
+                    {s.cta.label}
+                  </a>
+                ) : (
+                  <Link to={s.cta.href} className="btn-primary mt-4 inline-block">
+                    {s.cta.label}
+                  </Link>
+                )
+              )}
             </div>
           ))}
         </div>

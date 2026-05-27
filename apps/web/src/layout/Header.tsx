@@ -2,7 +2,7 @@ import { NavLink, Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
 
-type NavLeaf = { to: string; label: string; end?: boolean };
+type NavLeaf = { to: string; label: string; end?: boolean; external?: boolean };
 type NavGroup = { label: string; children: NavLeaf[] };
 type NavItem = NavLeaf | NavGroup;
 
@@ -31,9 +31,9 @@ const nav: NavItem[] = [
       { to: '/page/program-senior', label: "Senior Men's" },
       { to: '/page/high-performance', label: 'High Performance' },
       { to: '/page/camps', label: 'Camps' },
+      { to: 'https://www.warwickfootball.bm/registration', label: 'Registration', external: true },
     ],
   },
-  { to: '/teams', label: 'Teams' },
   { to: '/fixtures', label: 'Fixtures' },
   { to: '/results', label: 'Results' },
   { to: '/news', label: 'News' },
@@ -51,6 +51,7 @@ const nav: NavItem[] = [
     children: [
       { to: '/page/membership', label: 'Membership' },
       { to: '/page/gear', label: 'Club Gear' },
+      { to: 'https://www.warwickfootball.bm/registration', label: 'Registration', external: true },
       { to: '/contact', label: 'Contact' },
     ],
   },
@@ -103,17 +104,29 @@ export function Header() {
                   </svg>
                 </button>
                 <div className="invisible absolute left-0 top-full z-50 min-w-[12rem] -translate-y-1 rounded-md border border-navy-600 bg-white py-1 opacity-0 shadow-lg transition-all group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-                  {item.children.map((c) => (
-                    <NavLink
-                      key={c.to}
-                      to={c.to}
-                      className={({ isActive }) =>
-                        `block px-4 py-2 text-sm ${isActive ? 'bg-navy-50 text-navy' : 'text-slate-700 hover:bg-navy-50 hover:text-navy'}`
-                      }
-                    >
-                      {c.label}
-                    </NavLink>
-                  ))}
+                  {item.children.map((c) =>
+                    c.external ? (
+                      <a
+                        key={c.to}
+                        href={c.to}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-navy-50 hover:text-navy"
+                      >
+                        {c.label}
+                      </a>
+                    ) : (
+                      <NavLink
+                        key={c.to}
+                        to={c.to}
+                        className={({ isActive }) =>
+                          `block px-4 py-2 text-sm ${isActive ? 'bg-navy-50 text-navy' : 'text-slate-700 hover:bg-navy-50 hover:text-navy'}`
+                        }
+                      >
+                        {c.label}
+                      </NavLink>
+                    ),
+                  )}
                 </div>
               </div>
             ) : (
@@ -206,17 +219,29 @@ export function Header() {
                     </svg>
                   </summary>
                   <div className="mt-1 ml-3 space-y-1 border-l border-white/15 pl-3">
-                    {item.children.map((c) => (
-                      <NavLink
-                        key={c.to}
-                        to={c.to}
-                        className={({ isActive }) =>
-                          `block rounded px-2 py-1.5 text-sm ${isActive ? 'bg-white/10 text-gold' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
-                        }
-                      >
-                        {c.label}
-                      </NavLink>
-                    ))}
+                    {item.children.map((c) =>
+                      c.external ? (
+                        <a
+                          key={c.to}
+                          href={c.to}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded px-2 py-1.5 text-sm text-white/80 hover:bg-white/10 hover:text-white"
+                        >
+                          {c.label}
+                        </a>
+                      ) : (
+                        <NavLink
+                          key={c.to}
+                          to={c.to}
+                          className={({ isActive }) =>
+                            `block rounded px-2 py-1.5 text-sm ${isActive ? 'bg-white/10 text-gold' : 'text-white/80 hover:bg-white/10 hover:text-white'}`
+                          }
+                        >
+                          {c.label}
+                        </NavLink>
+                      ),
+                    )}
                   </div>
                 </details>
               ) : (
