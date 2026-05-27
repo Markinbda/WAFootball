@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.vite/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Editor
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Netlify CLI state
+.netlify/
+
+# TypeScript
+*.tsbuildinfo
+
+# Test
+coverage/
+
+# Misc working/scratch files we don't want in git
+*.pptx
+*.pdf
+*.docx
+WFA-Brief-Critique.*
+WFA-Pitch-Deck.*
