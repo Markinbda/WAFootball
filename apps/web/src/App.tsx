@@ -17,6 +17,7 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
 import { Gallery } from './pages/Gallery';
+import { ContentPage } from './pages/ContentPage';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -35,6 +36,7 @@ export default function App() {
         <Route path="stats" element={<Stats />} />
         <Route path="training" element={<Training />} />
         <Route path="gallery" element={<Gallery />} />
+        <Route path="page/:slug" element={<ContentPage />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
