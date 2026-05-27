@@ -42,10 +42,10 @@ export function CoachDashboard() {
                   <div className="text-xs text-slate-500">{t.ageGroup}</div>
                 </div>
                 <Link
-                  to={`/teams/${t.slug}`}
+                  to={`/calendar/${t.slug}`}
                   className="text-sm font-semibold text-navy hover:text-navy-500"
                 >
-                  Manage →
+                  Schedule →
                 </Link>
               </li>
             ))}

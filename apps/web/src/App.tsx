@@ -21,6 +21,7 @@ import { ContentPage } from './pages/ContentPage';
 import { History } from './pages/History';
 import { Register } from './pages/Register';
 import { RegistrationWizard } from './pages/RegistrationWizard';
+import { TeamCalendar } from './pages/TeamCalendar';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -43,6 +44,14 @@ export default function App() {
         <Route path="page/:slug" element={<ContentPage />} />
         <Route path="register" element={<Register />} />
         <Route path="register/start" element={<RegistrationWizard />} />
+        <Route
+          path="calendar/:teamSlug"
+          element={
+            <RequireAuth>
+              <TeamCalendar />
+            </RequireAuth>
+          }
+        />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
