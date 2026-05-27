@@ -61,7 +61,7 @@ export function NewsTicker() {
               <Link
                 key={`${it.key}-${i}`}
                 to={it.href}
-                className="inline-flex items-center gap-3 text-sm hover:text-gold"
+                className="inline-flex items-center gap-3 text-sm !text-white hover:!text-gold"
               >
                 <span
                   className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${

@@ -22,9 +22,11 @@ export function Header() {
     <header className="bg-navy text-white shadow-md">
       <div className="container-page flex h-16 items-center justify-between">
         <Link to="/" className="flex items-center gap-3 text-white hover:text-gold">
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-white font-display text-xl text-navy">
-            W
-          </div>
+          <img
+            src="/logo.png"
+            alt="Warwick FA crest"
+            className="h-11 w-11 rounded-full bg-white object-contain p-0.5 shadow"
+          />
           <div className="leading-tight">
             <div className="font-display text-lg tracking-wider">Warwick FA</div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-gold">Bermuda Football</div>

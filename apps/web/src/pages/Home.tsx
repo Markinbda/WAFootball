@@ -40,9 +40,11 @@ export function Home() {
             </div>
           </div>
           <div className="hidden lg:flex lg:items-center lg:justify-center">
-            <div className="grid h-40 w-40 place-items-center rounded-full bg-white shadow-2xl">
-              <span className="font-display text-7xl text-navy">W</span>
-            </div>
+            <img
+              src="/logo.png"
+              alt="Warwick FA crest"
+              className="h-56 w-56 rounded-full bg-white object-contain p-2 shadow-2xl"
+            />
           </div>
         </div>
       </section>
