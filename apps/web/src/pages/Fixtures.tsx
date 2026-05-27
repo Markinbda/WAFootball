@@ -1,10 +1,32 @@
-import { UPCOMING_FIXTURES } from '@/data/seed';
+import { useFixtures } from '@/data/hooks';
+import { fixturesToIcs, downloadIcs } from '@/lib/ics';
 
 export function Fixtures() {
+  const { data: fixtures, loading } = useFixtures();
+
+  function exportIcs() {
+    const ics = fixturesToIcs(fixtures);
+    downloadIcs('warwick-fa-fixtures.ics', ics);
+  }
+
   return (
     <div className="container-page py-12">
-      <h1 className="text-4xl">Upcoming Fixtures</h1>
-      <p className="mt-2 text-slate-600">All Warwick FA matches across every team and competition.</p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl">Upcoming Fixtures</h1>
+          <p className="mt-2 text-slate-600">All Warwick FA matches across every team and competition.</p>
+        </div>
+        <button
+          type="button"
+          onClick={exportIcs}
+          disabled={fixtures.length === 0}
+          className="btn-secondary"
+        >
+          Add to Calendar (.ics)
+        </button>
+      </div>
+
+      {loading && <p className="mt-6 text-sm text-slate-500">Loading…</p>}
 
       <div className="mt-8 overflow-hidden card">
         <table className="min-w-full divide-y divide-slate-200">
@@ -18,7 +40,7 @@ export function Fixtures() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200 bg-white text-sm">
-            {UPCOMING_FIXTURES.map((f) => (
+            {fixtures.map((f) => (
               <tr key={f.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
                   {new Date(f.date).toLocaleString('en-GB', {

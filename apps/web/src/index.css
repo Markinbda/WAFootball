@@ -39,4 +39,8 @@
   .card {
     @apply rounded-xl border border-slate-200 bg-white shadow-sm;
   }
+  .input {
+    @apply w-full rounded border border-slate-300 p-2 text-sm
+      focus:border-navy focus:outline-none focus:ring-1 focus:ring-navy;
+  }
 }

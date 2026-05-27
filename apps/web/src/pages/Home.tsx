@@ -1,7 +1,12 @@
 import { Link } from 'react-router-dom';
-import { UPCOMING_FIXTURES, RECENT_RESULTS, NEWS } from '@/data/seed';
+import { useFixtures, useResults, useNews } from '@/data/hooks';
 
 export function Home() {
+  const { data: fixtures } = useFixtures();
+  const { data: results } = useResults();
+  const { data: news } = useNews();
+  const nextMatch = fixtures[0];
+  const latestResult = results[0];
   return (
     <>
       {/* HERO */}
@@ -43,16 +48,16 @@ export function Home() {
       <section className="container-page grid gap-6 py-12 md:grid-cols-3">
         <div className="card p-6">
           <h3 className="text-xl">Next Match</h3>
-          {UPCOMING_FIXTURES[0] && (
+          {nextMatch && (
             <>
               <p className="mt-2 text-2xl font-display text-navy">
-                {UPCOMING_FIXTURES[0].team} vs {UPCOMING_FIXTURES[0].opponent}
+                {nextMatch.team} vs {nextMatch.opponent}
               </p>
               <p className="mt-1 text-sm text-slate-600">
-                {new Date(UPCOMING_FIXTURES[0].date).toLocaleString('en-GB', {
+                {new Date(nextMatch.date).toLocaleString('en-GB', {
                   weekday: 'short', day: 'numeric', month: 'short',
                   hour: '2-digit', minute: '2-digit',
-                })}{' '}· {UPCOMING_FIXTURES[0].venue} · {UPCOMING_FIXTURES[0].competition}
+                })}{' '}· {nextMatch.venue} · {nextMatch.competition}
               </p>
             </>
           )}
@@ -62,15 +67,15 @@ export function Home() {
         </div>
         <div className="card p-6">
           <h3 className="text-xl">Latest Result</h3>
-          {RECENT_RESULTS[0] && (
+          {latestResult && (
             <>
               <p className="mt-2 text-2xl font-display text-navy">
-                {RECENT_RESULTS[0].team} {RECENT_RESULTS[0].scoreFor}–{RECENT_RESULTS[0].scoreAgainst} {RECENT_RESULTS[0].opponent}
+                {latestResult.team} {latestResult.scoreFor}–{latestResult.scoreAgainst} {latestResult.opponent}
               </p>
               <p className="mt-1 text-sm text-slate-600">
-                {new Date(RECENT_RESULTS[0].date).toLocaleDateString('en-GB', {
+                {new Date(latestResult.date).toLocaleDateString('en-GB', {
                   weekday: 'short', day: 'numeric', month: 'short',
-                })}{' '}· {RECENT_RESULTS[0].venue} · {RECENT_RESULTS[0].competition}
+                })}{' '}· {latestResult.venue} · {latestResult.competition}
               </p>
             </>
           )}
@@ -97,7 +102,7 @@ export function Home() {
             <Link to="/news" className="text-sm font-semibold">All news →</Link>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {NEWS.map((item) => (
+            {news.slice(0, 3).map((item) => (
               <article key={item.id} className="card overflow-hidden">
                 <div className="h-40 bg-gradient-to-br from-navy via-navy-600 to-navy-500" />
                 <div className="p-5">

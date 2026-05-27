@@ -1,13 +1,16 @@
-import { RECENT_RESULTS } from '@/data/seed';
+import { useResults } from '@/data/hooks';
 
 export function Results() {
+  const { data: results, loading } = useResults();
   return (
     <div className="container-page py-12">
       <h1 className="text-4xl">Recent Results</h1>
       <p className="mt-2 text-slate-600">Match outcomes across all Warwick FA teams.</p>
 
+      {loading && <p className="mt-6 text-sm text-slate-500">Loading…</p>}
+
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-        {RECENT_RESULTS.map((r) => {
+        {results.map((r) => {
           const win = r.scoreFor > r.scoreAgainst;
           const draw = r.scoreFor === r.scoreAgainst;
           const color = win ? 'bg-pitch text-white' : draw ? 'bg-gold text-navy' : 'bg-red-600 text-white';

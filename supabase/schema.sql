@@ -5,7 +5,12 @@
 -- =========================================================
 -- ROLES
 -- =========================================================
-create type if not exists app_role as enum ('admin', 'coach', 'parent', 'member');
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'app_role') then
+    create type app_role as enum ('admin', 'coach', 'parent', 'member');
+  end if;
+end $$;
 
 create table if not exists public.user_roles (
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -96,6 +101,12 @@ create policy "admin manages roles"
   on public.user_roles for all
   using (public.has_role('admin'))
   with check (public.has_role('admin'));
+
+-- Allow a freshly signed-up user to claim only the 'member' role for themselves.
+drop policy if exists "user self-claim member role" on public.user_roles;
+create policy "user self-claim member role"
+  on public.user_roles for insert
+  with check (user_id = auth.uid() and role = 'member');
 
 -- teams / fixtures / news: public read; admin write.
 drop policy if exists "public read teams"     on public.teams;

@@ -8,7 +8,9 @@ import { Teams } from './pages/Teams';
 import { TeamDetail } from './pages/TeamDetail';
 import { Contact } from './pages/Contact';
 import { Login } from './pages/Login';
+import { Signup } from './pages/Signup';
 import { CoachDashboard } from './pages/CoachDashboard';
+import { AdminDashboard } from './pages/AdminDashboard';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -24,11 +26,20 @@ export default function App() {
         <Route path="teams/:slug" element={<TeamDetail />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
+        <Route path="signup" element={<Signup />} />
         <Route
           path="coach"
           element={
             <RequireAuth roles={['coach', 'admin']}>
               <CoachDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="admin"
+          element={
+            <RequireAuth roles={['admin', 'coach']}>
+              <AdminDashboard />
             </RequireAuth>
           }
         />

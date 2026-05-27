@@ -1,9 +1,12 @@
 import { Link, useParams } from 'react-router-dom';
-import { TEAMS, UPCOMING_FIXTURES, RECENT_RESULTS } from '@/data/seed';
+import { useTeams, useFixtures, useResults } from '@/data/hooks';
 
 export function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const team = TEAMS.find((t) => t.slug === slug);
+  const { data: teams } = useTeams();
+  const { data: fixtures } = useFixtures();
+  const { data: results } = useResults();
+  const team = teams.find((t) => t.slug === slug);
 
   if (!team) {
     return (
@@ -14,11 +17,11 @@ export function TeamDetail() {
     );
   }
 
-  const teamFixtures = UPCOMING_FIXTURES.filter((f) =>
+  const teamFixtures = fixtures.filter((f) =>
     f.team.toLowerCase().includes(team.name.toLowerCase().split(' ').pop()!.toLowerCase()) ||
     team.name.toLowerCase().includes(f.team.toLowerCase()),
   );
-  const teamResults = RECENT_RESULTS.filter((r) =>
+  const teamResults = results.filter((r) =>
     r.team.toLowerCase().includes(team.name.toLowerCase().split(' ').pop()!.toLowerCase()) ||
     team.name.toLowerCase().includes(r.team.toLowerCase()),
   );

@@ -13,6 +13,7 @@ const nav = [
 export function Header() {
   const { user, roles, signOut } = useAuth();
   const isCoach = roles.includes('coach') || roles.includes('admin');
+  const isAdmin = roles.includes('admin');
 
   return (
     <header className="bg-navy text-white shadow-md">
@@ -56,6 +57,18 @@ export function Header() {
               Coach
             </NavLink>
           )}
+          {isAdmin && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `rounded px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive ? 'bg-white text-navy' : 'bg-white/90 text-navy hover:bg-white'
+                }`
+              }
+            >
+              Admin
+            </NavLink>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -72,12 +85,20 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link
-              to="/login"
-              className="rounded bg-gold px-3 py-1.5 text-xs font-semibold text-navy hover:brightness-95"
-            >
-              Sign in
-            </Link>
+            <>
+              <Link
+                to="/signup"
+                className="hidden rounded border border-white/30 px-3 py-1.5 text-xs font-semibold text-white hover:bg-white/10 sm:inline-block"
+              >
+                Join
+              </Link>
+              <Link
+                to="/login"
+                className="rounded bg-gold px-3 py-1.5 text-xs font-semibold text-navy hover:brightness-95"
+              >
+                Sign in
+              </Link>
+            </>
           )}
         </div>
       </div>

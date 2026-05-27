@@ -1,13 +1,16 @@
-import { NEWS } from '@/data/seed';
+import { useNews } from '@/data/hooks';
 
 export function News() {
+  const { data: items, loading } = useNews();
   return (
     <div className="container-page py-12">
       <h1 className="text-4xl">News</h1>
       <p className="mt-2 text-slate-600">Match reports, club announcements, and updates.</p>
 
+      {loading && <p className="mt-6 text-sm text-slate-500">Loading…</p>}
+
       <div className="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {NEWS.map((item) => (
+        {items.map((item) => (
           <article key={item.id} className="card overflow-hidden">
             <div className="h-44 bg-gradient-to-br from-navy via-navy-600 to-navy-500" />
             <div className="p-5">

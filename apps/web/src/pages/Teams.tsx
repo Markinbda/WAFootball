@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom';
-import { TEAMS } from '@/data/seed';
+import { useTeams } from '@/data/hooks';
 
 export function Teams() {
+  const { data: teams } = useTeams();
   const grouped = {
-    Senior: TEAMS.filter((t) => t.ageGroup === 'Senior'),
-    Youth:  TEAMS.filter((t) => t.ageGroup === 'Youth'),
-    Mini:   TEAMS.filter((t) => t.ageGroup === 'Mini'),
+    Senior: teams.filter((t) => t.ageGroup === 'Senior'),
+    Youth:  teams.filter((t) => t.ageGroup === 'Youth'),
+    Mini:   teams.filter((t) => t.ageGroup === 'Mini'),
   };
 
   return (
