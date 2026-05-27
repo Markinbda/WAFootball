@@ -29,33 +29,38 @@ export function TeamDetail() {
 
   return (
     <>
-      <section className="relative overflow-hidden bg-navy text-white">
-        {team.photoUrl && (
-          <img
-            src={team.photoUrl}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full object-cover opacity-30"
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-navy via-navy/90 to-navy/40" />
-        <div className="container-page relative py-14">
-          <div className="text-xs font-semibold uppercase tracking-widest text-gold">
-            {team.ageGroup}
-          </div>
-          <h1 className="mt-2 text-5xl text-white">{team.name}</h1>
-          <p className="mt-3 max-w-2xl text-white/80">{team.blurb}</p>
-          <div className="mt-5 flex items-center gap-3">
-            <img
-              src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(team.coach)}&backgroundType=gradientLinear&backgroundColor=FFC72C,00186C`}
-              alt=""
-              aria-hidden
-              className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
-            />
-            <div className="text-sm">
-              <span className="text-white/70">Coach:</span>{' '}
-              <span className="font-semibold text-gold">{team.coach}</span>
+      <section className="bg-navy text-white">
+        <div className="container-page grid items-center gap-8 py-14 md:grid-cols-[1fr_auto]">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-widest text-gold">
+              {team.ageGroup}
             </div>
+            <h1 className="mt-2 text-5xl text-white">{team.name}</h1>
+            <p className="mt-3 max-w-2xl text-white/80">{team.blurb}</p>
+            <div className="mt-5 flex items-center gap-3">
+              <img
+                src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(team.coach)}&backgroundType=gradientLinear&backgroundColor=FFC72C,00186C`}
+                alt=""
+                aria-hidden
+                className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
+              />
+              <div className="text-sm">
+                <span className="text-white/70">Coach:</span>{' '}
+                <span className="font-semibold text-gold">{team.coach}</span>
+              </div>
+            </div>
+          </div>
+          <div className="h-48 w-full overflow-hidden rounded-xl border border-white/10 bg-navy-600 shadow-lg md:h-56 md:w-80 lg:h-64 lg:w-96">
+            {team.photoUrl ? (
+              <img src={team.photoUrl} alt={`${team.name} team photo`} className="h-full w-full object-cover" />
+            ) : (
+              <div className="grid h-full w-full place-items-center text-center text-white/40">
+                <div>
+                  <div className="font-display text-5xl">📷</div>
+                  <div className="mt-2 text-xs uppercase tracking-widest">Team photo</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
