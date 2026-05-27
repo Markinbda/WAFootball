@@ -31,7 +31,7 @@ const nav: NavItem[] = [
       { to: '/page/program-senior', label: "Senior Men's" },
       { to: '/page/high-performance', label: 'High Performance' },
       { to: '/page/camps', label: 'Camps' },
-      { to: 'https://www.warwickfootball.bm/registration', label: 'Registration', external: true },
+      { to: '/register', label: 'Registration' },
     ],
   },
   { to: '/fixtures', label: 'Fixtures' },
@@ -51,7 +51,7 @@ const nav: NavItem[] = [
     children: [
       { to: '/page/membership', label: 'Membership' },
       { to: '/page/gear', label: 'Club Gear' },
-      { to: 'https://www.warwickfootball.bm/registration', label: 'Registration', external: true },
+      { to: '/register', label: 'Registration' },
       { to: '/contact', label: 'Contact' },
     ],
   },

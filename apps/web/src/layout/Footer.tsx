@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 export function Footer() {
   const year = new Date().getFullYear();
   return (
@@ -27,14 +29,9 @@ export function Footer() {
           <h4 className="text-sm font-semibold text-gold">Get Involved</h4>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
             <li>
-              <a
-                href="https://www.warwickfootball.bm/registration"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white/80 hover:text-gold"
-              >
+              <Link to="/register" className="text-white/80 hover:text-gold">
                 Registration
-              </a>
+              </Link>
             </li>
             <li>Trials</li>
             <li>Volunteer</li>

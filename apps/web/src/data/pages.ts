@@ -100,8 +100,7 @@ export const PAGES: Record<string, PageContent> = {
         paragraphs: ['Use our online registration form and a coordinator will follow up within 48 hours.'],
         cta: {
           label: 'Register Now',
-          href: 'https://www.warwickfootball.bm/registration',
-          external: true,
+          href: '/register',
         },
       },
       {
@@ -254,8 +253,7 @@ export const PAGES: Record<string, PageContent> = {
         ],
         cta: {
           label: 'Register Now',
-          href: 'https://www.warwickfootball.bm/registration',
-          external: true,
+          href: '/register',
         },
       },
       {

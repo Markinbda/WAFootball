@@ -19,6 +19,8 @@ import { Training } from './pages/Training';
 import { Gallery } from './pages/Gallery';
 import { ContentPage } from './pages/ContentPage';
 import { History } from './pages/History';
+import { Register } from './pages/Register';
+import { RegistrationWizard } from './pages/RegistrationWizard';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -39,6 +41,8 @@ export default function App() {
         <Route path="gallery" element={<Gallery />} />
         <Route path="page/history" element={<History />} />
         <Route path="page/:slug" element={<ContentPage />} />
+        <Route path="register" element={<Register />} />
+        <Route path="register/start" element={<RegistrationWizard />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
