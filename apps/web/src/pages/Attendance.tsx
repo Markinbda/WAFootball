@@ -70,9 +70,9 @@ export function Attendance() {
         return;
       }
 
-      // Events for those teams in the past 14 days → next 28 days.
-      const from = new Date(Date.now() - 14 * 86_400_000).toISOString();
-      const to   = new Date(Date.now() + 28 * 86_400_000).toISOString();
+      // Events for those teams in the past 90 days → next 180 days.
+      const from = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      const to   = new Date(Date.now() + 180 * 86_400_000).toISOString();
       const { data: ev } = await sb
         .from('team_events')
         .select('id, team_id, kind, title, starts_at, opponent, location, teams(name)')
@@ -155,10 +155,10 @@ export function Attendance() {
       ) : (
         <div className="mt-6 space-y-6">
           <EventList title="Upcoming"    events={grouped.upcoming} asSuffix={asSuffix} />
-          <EventList title="Recent (past 14 days)" events={grouped.past.reverse()} asSuffix={asSuffix} />
+          <EventList title="Recent (past 90 days)" events={grouped.past.reverse()} asSuffix={asSuffix} />
           {events.length === 0 && (
             <p className="text-sm text-slate-500">
-              No practices or games scheduled in the window. Add one from the team calendar.
+              No practices or games scheduled for your team(s) in the past 90 days or next 180 days. Add one from the team calendar.
             </p>
           )}
         </div>
