@@ -1,4 +1,5 @@
 import { useResults } from '@/data/hooks';
+import { LeagueTable } from '@/components/LeagueTable';
 
 export function Results() {
   const { data: results, loading } = useResults();
@@ -7,6 +8,15 @@ export function Results() {
       <h1 className="text-4xl">Recent Results</h1>
       <p className="mt-2 text-slate-600">Match outcomes across all Warwick FA teams.</p>
 
+      <div className="mt-8">
+        <h2 className="text-2xl">Standings</h2>
+        <p className="mt-1 text-sm text-slate-500">Computed from final results across every Warwick FA team.</p>
+        <div className="mt-4">
+          <LeagueTable />
+        </div>
+      </div>
+
+      <h2 className="mt-12 text-2xl">All results</h2>
       {loading && <p className="mt-6 text-sm text-slate-500">Loading…</p>}
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">

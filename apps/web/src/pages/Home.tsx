@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useFixtures, useResults, useNews } from '@/data/hooks';
+import { LeagueTable } from '@/components/LeagueTable';
 
 export function Home() {
   const { data: fixtures } = useFixtures();
@@ -94,8 +95,19 @@ export function Home() {
         </div>
       </section>
 
-      {/* NEWS */}
+      {/* STANDINGS */}
       <section className="bg-slate-50 py-16">
+        <div className="container-page">
+          <div className="mb-6 flex items-end justify-between">
+            <h2 className="text-3xl">Standings</h2>
+            <Link to="/results" className="text-sm font-semibold">Full table →</Link>
+          </div>
+          <LeagueTable limit={5} />
+        </div>
+      </section>
+
+      {/* NEWS */}
+      <section className="bg-white py-16">
         <div className="container-page">
           <div className="mb-8 flex items-end justify-between">
             <h2 className="text-3xl">Latest News</h2>

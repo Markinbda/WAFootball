@@ -13,6 +13,7 @@ import { CoachDashboard } from './pages/CoachDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { FixtureDetail } from './pages/FixtureDetail';
 import { MatchConsole } from './pages/MatchConsole';
+import { PlayerProfile } from './pages/PlayerProfile';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -27,6 +28,7 @@ export default function App() {
         <Route path="results" element={<Results />} />
         <Route path="teams" element={<Teams />} />
         <Route path="teams/:slug" element={<TeamDetail />} />
+        <Route path="players/:id" element={<PlayerProfile />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />

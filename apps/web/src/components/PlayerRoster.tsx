@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { usePlayers, type Player } from '@/data/phase3';
 import { useAuth } from '@/auth/AuthProvider';
 
@@ -23,10 +24,11 @@ export function PlayerRoster({ teamId }: { teamId: string | undefined }) {
 function PlayerCard({ player }: { player: Player }) {
   const [hover, setHover] = useState(false);
   return (
-    <div
+    <Link
+      to={`/players/${player.id}`}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
-      className="card overflow-hidden"
+      className="card overflow-hidden block transition-transform hover:-translate-y-0.5"
     >
       <div className="relative aspect-square bg-gradient-to-br from-navy via-navy-600 to-navy-500">
         {player.photo_url ? (
@@ -54,6 +56,6 @@ function PlayerCard({ player }: { player: Player }) {
           <p className="mt-2 text-xs text-slate-600 line-clamp-3">{player.bio}</p>
         )}
       </div>
-    </div>
+    </Link>
   );
 }
