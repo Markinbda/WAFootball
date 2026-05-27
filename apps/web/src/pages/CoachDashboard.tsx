@@ -6,7 +6,7 @@ import { TEAMS, UPCOMING_FIXTURES } from '@/data/seed';
 
 const QUICK_ACTIONS: { title: string; desc: string; to: string }[] = [
   { title: 'Roster', desc: 'Add or remove players', to: '/admin?section=players' },
-  { title: 'Attendance', desc: 'Mark training session', to: '/training' },
+  { title: 'Attendance', desc: 'Mark training session', to: '/attendance' },
   { title: 'Comms', desc: 'Message parents/players', to: '/admin?section=news' },
   { title: 'Photos', desc: 'Upload match-day gallery', to: '/admin?section=gallery' },
 ];
@@ -60,6 +60,13 @@ export function CoachDashboard() {
     return TEAMS.slice(0, 4).map((t) => ({ slug: t.slug, name: t.name, ageGroup: t.ageGroup }));
   }, [emulating, emTeams]);
 
+  // Preserve emulation across navigation: append `?as=` (or `&as=`) to every
+  // outbound link when an admin is impersonating a coach.
+  function withAs(to: string): string {
+    if (!asId) return to;
+    return to.includes('?') ? `${to}&as=${asId}` : `${to}?as=${asId}`;
+  }
+
   return (
     <div className="container-page py-12">
       {emulating && (
@@ -83,8 +90,8 @@ export function CoachDashboard() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Link to="/admin?section=news" className="btn-primary">+ Post update</Link>
-          <Link to="/training" className="btn-ghost">Take attendance</Link>
+          <Link to={withAs('/admin?section=news')} className="btn-primary">+ Post update</Link>
+          <Link to={withAs('/attendance')} className="btn-ghost">Take attendance</Link>
         </div>
       </div>
 
@@ -105,7 +112,7 @@ export function CoachDashboard() {
                   <div className="text-xs text-slate-500">{t.ageGroup}</div>
                 </div>
                 <Link
-                  to={`/calendar/${t.slug}`}
+                  to={withAs(`/calendar/${t.slug}`)}
                   className="text-sm font-semibold text-navy hover:text-navy-500"
                 >
                   Schedule →
@@ -145,7 +152,7 @@ export function CoachDashboard() {
             {QUICK_ACTIONS.map(({ title, desc, to }) => (
               <Link
                 key={title}
-                to={to}
+                to={withAs(to)}
                 className="card flex flex-col items-start p-4 text-left hover:border-navy hover:shadow-md"
               >
                 <div className="font-display text-lg text-navy">{title}</div>

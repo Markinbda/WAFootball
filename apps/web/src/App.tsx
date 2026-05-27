@@ -22,6 +22,7 @@ import { History } from './pages/History';
 import { Register } from './pages/Register';
 import { RegistrationWizard } from './pages/RegistrationWizard';
 import { TeamCalendar } from './pages/TeamCalendar';
+import { Attendance, AttendanceEvent } from './pages/Attendance';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -49,6 +50,22 @@ export default function App() {
           element={
             <RequireAuth>
               <TeamCalendar />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="attendance"
+          element={
+            <RequireAuth roles={['coach', 'admin']}>
+              <Attendance />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="attendance/:eventId"
+          element={
+            <RequireAuth roles={['coach', 'admin']}>
+              <AttendanceEvent />
             </RequireAuth>
           }
         />
