@@ -20,19 +20,19 @@ export function Home() {
               'radial-gradient(circle at 20% 30%, #FFC72C 0px, transparent 220px), radial-gradient(circle at 80% 70%, #1E8E3E 0px, transparent 260px)',
           }}
         />
-        <div className="container-page relative grid gap-10 py-20 lg:grid-cols-2 lg:py-28">
+        <div className="container-page relative grid gap-6 py-10 lg:grid-cols-2 lg:py-14">
           <div>
             <div className="inline-block rounded bg-gold px-3 py-1 text-xs font-bold uppercase tracking-widest text-navy">
               Bermuda · Est. 1965
             </div>
-            <h1 className="mt-5 font-display text-5xl leading-tight text-white sm:text-6xl lg:text-7xl">
-              The Home of<br />Warwick Football.
+            <h1 className="mt-3 font-display text-3xl leading-tight text-white sm:text-4xl lg:text-5xl">
+              The Home of Warwick Football.
             </h1>
-            <p className="mt-5 max-w-lg text-lg text-white/80">
-              Fixtures, results, news and team pages — for every Warwick FA squad,
-              from Mini Soccer to the Men's First Team.
+            <p className="mt-3 max-w-lg text-base text-white/80">
+              Fixtures, results, news and team pages for every Warwick FA squad —
+              Mini Soccer to the Men's First Team.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <Link to="/teams" className="btn-secondary">View Teams</Link>
               <Link to="/fixtures" className="btn-ghost !text-white hover:!bg-white/10">
                 Upcoming Fixtures
@@ -40,8 +40,8 @@ export function Home() {
             </div>
           </div>
           <div className="hidden lg:flex lg:items-center lg:justify-center">
-            <div className="grid h-72 w-72 place-items-center rounded-full bg-white shadow-2xl">
-              <span className="font-display text-9xl text-navy">W</span>
+            <div className="grid h-40 w-40 place-items-center rounded-full bg-white shadow-2xl">
+              <span className="font-display text-7xl text-navy">W</span>
             </div>
           </div>
         </div>
