@@ -1,5 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import { useTeams, useFixtures, useResults } from '@/data/hooks';
+import { PlayerRoster } from '@/components/PlayerRoster';
 
 export function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -92,6 +93,14 @@ export function TeamDetail() {
             </ul>
           )}
         </section>
+      </div>
+
+      <div className="container-page pb-16">
+        <h2 className="text-2xl">Squad</h2>
+        <p className="mt-1 text-sm text-slate-500">Tap a card to see the player’s bio.</p>
+        <div className="mt-6">
+          <PlayerRoster teamId={team.id} />
+        </div>
       </div>
     </>
   );

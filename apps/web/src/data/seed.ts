@@ -1,4 +1,5 @@
 export type Team = {
+  id?: string;
   slug: string;
   name: string;
   ageGroup: string;

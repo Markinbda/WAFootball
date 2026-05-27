@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import { useFixtures } from '@/data/hooks';
 import { fixturesToIcs, downloadIcs } from '@/lib/ics';
 
@@ -43,13 +44,17 @@ export function Fixtures() {
             {fixtures.map((f) => (
               <tr key={f.id} className="hover:bg-slate-50">
                 <td className="px-4 py-3">
-                  {new Date(f.date).toLocaleString('en-GB', {
-                    weekday: 'short', day: 'numeric', month: 'short',
-                    hour: '2-digit', minute: '2-digit',
-                  })}
+                  <Link to={`/fixtures/${f.id}`} className="hover:text-navy">
+                    {new Date(f.date).toLocaleString('en-GB', {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </Link>
                 </td>
                 <td className="px-4 py-3 font-semibold text-navy">{f.team}</td>
-                <td className="px-4 py-3">{f.opponent}</td>
+                <td className="px-4 py-3">
+                  <Link to={`/fixtures/${f.id}`} className="hover:underline">{f.opponent}</Link>
+                </td>
                 <td className="px-4 py-3">
                   <span className={`rounded px-2 py-1 text-xs font-semibold ${
                     f.venue === 'Home' ? 'bg-pitch/10 text-pitch' : 'bg-slate-200 text-slate-700'

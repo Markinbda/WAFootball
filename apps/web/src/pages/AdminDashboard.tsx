@@ -10,7 +10,7 @@ export function AdminDashboard() {
   const isAdmin = roles.includes('admin');
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [tab, setTab] = useState<'news' | 'fixture'>('news');
+  const [tab, setTab] = useState<'news' | 'fixture' | 'players'>('news');
 
   useEffect(() => {
     if (!sb) return;
@@ -49,10 +49,18 @@ export function AdminDashboard() {
         >
           Fixtures &amp; Results
         </button>
+        <button
+          onClick={() => setTab('players')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'players' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Players
+        </button>
       </div>
 
       <div className="mt-6">
-        {tab === 'news' ? <NewsForm /> : <FixtureForm teams={teams} />}
+        {tab === 'news' && <NewsForm />}
+        {tab === 'fixture' && <FixtureForm teams={teams} />}
+        {tab === 'players' && <PlayerForm teams={teams} />}
       </div>
     </div>
   );
@@ -219,3 +227,109 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+function PlayerForm({ teams }: { teams: TeamOption[] }) {
+  const sb = getSupabase()!;
+  const [teamId, setTeamId] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [position, setPosition] = useState('');
+  const [squadNumber, setSquadNumber] = useState('');
+  const [bio, setBio] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!teamId) return;
+    setBusy(true); setStatus(null);
+    let photo_url: string | null = null;
+    if (file) {
+      const ext = file.name.split('.').pop() ?? 'jpg';
+      const path = `${teamId}/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await sb.storage
+        .from('player-photos')
+        .upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) {
+        setStatus(`Upload error: ${upErr.message}`);
+        setBusy(false);
+        return;
+      }
+      photo_url = sb.storage.from('player-photos').getPublicUrl(path).data.publicUrl;
+    }
+    const { error } = await sb.from('players').insert({
+      team_id: teamId,
+      full_name: fullName,
+      position: position || null,
+      squad_number: squadNumber ? Number(squadNumber) : null,
+      bio: bio || null,
+      photo_url,
+      active: true,
+    });
+    setBusy(false);
+    if (error) setStatus(`Error: ${error.message}`);
+    else {
+      setStatus('Player added.');
+      setFullName(''); setPosition(''); setSquadNumber(''); setBio(''); setFile(null);
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
+      <h2 className="text-xl font-semibold">Add a player</h2>
+      {teams.length === 0 && (
+        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
+          No teams in database. Add teams first.
+        </p>
+      )}
+      <Field label="Team">
+        <select required value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
+          <option value="">Select…</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Full name">
+        <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" />
+      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Position">
+          <select value={position} onChange={(e) => setPosition(e.target.value)} className="input">
+            <option value="">—</option>
+            <option>Goalkeeper</option>
+            <option>Defender</option>
+            <option>Midfielder</option>
+            <option>Forward</option>
+          </select>
+        </Field>
+        <Field label="Squad number">
+          <input
+            value={squadNumber}
+            onChange={(e) => setSquadNumber(e.target.value)}
+            className="input"
+            inputMode="numeric"
+          />
+        </Field>
+      </div>
+      <Field label="Bio">
+        <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input" rows={3} />
+      </Field>
+      <Field label="Photo (optional)">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-600"
+        />
+      </Field>
+      {status && (
+        <p className={`text-sm ${status.startsWith('Error') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>
+          {status}
+        </p>
+      )}
+      <button type="submit" className="btn-primary" disabled={busy}>
+        {busy ? 'Saving…' : 'Add player'}
+      </button>
+    </form>
+  );
+}
+

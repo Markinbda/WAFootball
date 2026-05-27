@@ -11,6 +11,8 @@ import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
 import { CoachDashboard } from './pages/CoachDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { FixtureDetail } from './pages/FixtureDetail';
+import { MatchConsole } from './pages/MatchConsole';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -21,6 +23,7 @@ export default function App() {
         <Route index element={<Home />} />
         <Route path="news" element={<News />} />
         <Route path="fixtures" element={<Fixtures />} />
+        <Route path="fixtures/:id" element={<FixtureDetail />} />
         <Route path="results" element={<Results />} />
         <Route path="teams" element={<Teams />} />
         <Route path="teams/:slug" element={<TeamDetail />} />
@@ -32,6 +35,14 @@ export default function App() {
           element={
             <RequireAuth roles={['coach', 'admin']}>
               <CoachDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="coach/match/:id"
+          element={
+            <RequireAuth roles={['coach', 'admin']}>
+              <MatchConsole />
             </RequireAuth>
           }
         />

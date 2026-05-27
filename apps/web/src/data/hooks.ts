@@ -46,9 +46,10 @@ function useResource<T>(
 
 export function useTeams() {
   return useResource<Team[]>(TEAMS, async (sb) => {
-    const { data, error } = await sb.from('teams').select('slug, name, age_group, coach, blurb').order('name');
+    const { data, error } = await sb.from('teams').select('id, slug, name, age_group, coach, blurb').order('name');
     if (error) throw error;
     return data?.map((r) => ({
+      id: r.id,
       slug: r.slug,
       name: r.name,
       ageGroup: r.age_group,
