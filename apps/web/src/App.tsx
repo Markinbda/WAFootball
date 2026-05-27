@@ -16,6 +16,7 @@ import { MatchConsole } from './pages/MatchConsole';
 import { PlayerProfile } from './pages/PlayerProfile';
 import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
+import { Gallery } from './pages/Gallery';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
 
@@ -33,6 +34,7 @@ export default function App() {
         <Route path="players/:id" element={<PlayerProfile />} />
         <Route path="stats" element={<Stats />} />
         <Route path="training" element={<Training />} />
+        <Route path="gallery" element={<Gallery />} />
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />

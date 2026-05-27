@@ -58,6 +58,8 @@ export function PlayerProfile() {
         <Stat label="Red Cards" value={stats.reds} tone="text-red-700" />
       </div>
 
+      <SeasonChart events={events} />
+
       <div className="container-page pb-16">
         <h2 className="text-2xl">Match log</h2>
         {events.length === 0 ? (
@@ -85,6 +87,64 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: str
     <div className="card p-5 text-center">
       <div className={`font-display text-5xl ${tone ?? 'text-navy'}`}>{value}</div>
       <div className="mt-1 text-xs uppercase tracking-wider text-slate-500">{label}</div>
+    </div>
+  );
+}
+
+type ChartEvent = { type: string; created_at: string };
+
+function SeasonChart({ events }: { events: ChartEvent[] }) {
+  // Bucket by month-of-event for goals, yellows, reds.
+  const buckets = new Map<string, { goals: number; yellows: number; reds: number }>();
+  for (const e of events) {
+    const d = new Date(e.created_at);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const slot = buckets.get(key) ?? { goals: 0, yellows: 0, reds: 0 };
+    if (e.type === 'goal_for') slot.goals += 1;
+    else if (e.type === 'yellow') slot.yellows += 1;
+    else if (e.type === 'red') slot.reds += 1;
+    buckets.set(key, slot);
+  }
+  const months = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b));
+  if (months.length === 0) return null;
+
+  const max = Math.max(1, ...months.map(([, v]) => v.goals + v.yellows + v.reds));
+
+  return (
+    <div className="container-page pb-6">
+      <h2 className="text-2xl">Season breakdown</h2>
+      <p className="mt-1 text-sm text-slate-500">Goals, yellows and reds by month.</p>
+      <div className="mt-4 card p-6">
+        <div className="flex items-end gap-4 overflow-x-auto pb-2">
+          {months.map(([key, v]) => {
+            const [y, m] = key.split('-');
+            const label = new Date(Number(y), Number(m) - 1, 1)
+              .toLocaleDateString('en-GB', { month: 'short' });
+            const h = (n: number) => `${(n / max) * 140}px`;
+            return (
+              <div key={key} className="flex w-12 shrink-0 flex-col items-center">
+                <div className="flex h-[160px] w-8 flex-col justify-end overflow-hidden rounded">
+                  {v.reds > 0 && (
+                    <div className="w-full bg-red-600" style={{ height: h(v.reds) }} title={`${v.reds} red`} />
+                  )}
+                  {v.yellows > 0 && (
+                    <div className="w-full bg-yellow-500" style={{ height: h(v.yellows) }} title={`${v.yellows} yellow`} />
+                  )}
+                  {v.goals > 0 && (
+                    <div className="w-full bg-pitch" style={{ height: h(v.goals) }} title={`${v.goals} goals`} />
+                  )}
+                </div>
+                <div className="mt-1 font-mono text-[10px] text-slate-500">{label}</div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-4 flex gap-4 text-xs text-slate-600">
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-pitch" /> Goals</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-yellow-500" /> Yellows</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-red-600" /> Reds</span>
+        </div>
+      </div>
     </div>
   );
 }

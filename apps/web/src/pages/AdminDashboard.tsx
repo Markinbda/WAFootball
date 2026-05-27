@@ -10,7 +10,7 @@ export function AdminDashboard() {
   const isAdmin = roles.includes('admin');
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [tab, setTab] = useState<'news' | 'fixture' | 'players' | 'teams' | 'training'>('news');
+  const [tab, setTab] = useState<'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors'>('news');
 
   useEffect(() => {
     if (!sb) return;
@@ -67,6 +67,18 @@ export function AdminDashboard() {
         >
           Training
         </button>
+        <button
+          onClick={() => setTab('gallery')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'gallery' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Gallery
+        </button>
+        <button
+          onClick={() => setTab('sponsors')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'sponsors' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Sponsors
+        </button>
       </div>
 
       <div className="mt-6">
@@ -75,6 +87,8 @@ export function AdminDashboard() {
         {tab === 'players' && <PlayerForm teams={teams} />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
         {tab === 'training' && <TrainingForm teams={teams} />}
+        {tab === 'gallery' && <GalleryForm teams={teams} />}
+        {tab === 'sponsors' && <SponsorForm />}
       </div>
     </div>
   );
@@ -465,3 +479,140 @@ function TrainingForm({ teams }: { teams: TeamOption[] }) {
   );
 }
 
+function GalleryForm({ teams }: { teams: TeamOption[] }) {
+  const sb = getSupabase()!;
+  const [files, setFiles] = useState<FileList | null>(null);
+  const [caption, setCaption] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!files || files.length === 0) return;
+    setBusy(true); setStatus(null);
+    let ok = 0;
+    let fail = 0;
+    for (const file of Array.from(files)) {
+      const ext = file.name.split('.').pop() ?? 'jpg';
+      const path = `${teamId || 'club'}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await sb.storage
+        .from('gallery')
+        .upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) { fail++; continue; }
+      const publicUrl = sb.storage.from('gallery').getPublicUrl(path).data.publicUrl;
+      const { error } = await sb.from('gallery_photos').insert({
+        url: publicUrl,
+        caption: caption || null,
+        team_id: teamId || null,
+      });
+      if (error) fail++; else ok++;
+    }
+    setBusy(false);
+    setStatus(fail ? `Uploaded ${ok}, ${fail} failed.` : `Uploaded ${ok} photo${ok === 1 ? '' : 's'}.`);
+    if (!fail) { setCaption(''); setFiles(null); }
+  }
+
+  return (
+    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
+      <h2 className="text-xl font-semibold">Upload gallery photos</h2>
+      <Field label="Team (optional)">
+        <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
+          <option value="">— Club-wide —</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Caption (applied to all)">
+        <input value={caption} onChange={(e) => setCaption(e.target.value)} className="input" />
+      </Field>
+      <Field label="Photos (multi-select)">
+        <input
+          required
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={(e) => setFiles(e.target.files)}
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-600"
+        />
+      </Field>
+      {status && (
+        <p className={`text-sm ${status.includes('failed') ? 'text-red-700' : 'text-pitch'}`}>{status}</p>
+      )}
+      <button type="submit" className="btn-primary" disabled={busy || !files}>{busy ? 'Uploading…' : 'Upload'}</button>
+    </form>
+  );
+}
+
+function SponsorForm() {
+  const sb = getSupabase()!;
+  const [name, setName] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  const [tier, setTier] = useState<'headline' | 'gold' | 'silver' | 'partner'>('partner');
+  const [sortOrder, setSortOrder] = useState('100');
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setStatus(null);
+    let logo_url: string | null = null;
+    if (file) {
+      const ext = file.name.split('.').pop() ?? 'png';
+      const path = `sponsors/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await sb.storage
+        .from('gallery')
+        .upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) { setStatus(`Upload error: ${upErr.message}`); setBusy(false); return; }
+      logo_url = sb.storage.from('gallery').getPublicUrl(path).data.publicUrl;
+    }
+    const { error } = await sb.from('sponsors').insert({
+      name,
+      logo_url,
+      website_url: websiteUrl || null,
+      tier,
+      sort_order: Number(sortOrder) || 100,
+      active: true,
+    });
+    setBusy(false);
+    if (error) setStatus(`Error: ${error.message}`);
+    else { setStatus('Sponsor added.'); setName(''); setWebsiteUrl(''); setFile(null); }
+  }
+
+  return (
+    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
+      <h2 className="text-xl font-semibold">Add sponsor</h2>
+      <Field label="Name">
+        <input required value={name} onChange={(e) => setName(e.target.value)} className="input" />
+      </Field>
+      <Field label="Website URL">
+        <input type="url" value={websiteUrl} onChange={(e) => setWebsiteUrl(e.target.value)} className="input" placeholder="https://" />
+      </Field>
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Tier">
+          <select value={tier} onChange={(e) => setTier(e.target.value as typeof tier)} className="input">
+            <option value="headline">Headline</option>
+            <option value="gold">Gold</option>
+            <option value="silver">Silver</option>
+            <option value="partner">Partner</option>
+          </select>
+        </Field>
+        <Field label="Sort order">
+          <input value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="input" inputMode="numeric" />
+        </Field>
+      </div>
+      <Field label="Logo (optional)">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-600"
+        />
+      </Field>
+      {status && (
+        <p className={`text-sm ${status.startsWith('Error') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>{status}</p>
+      )}
+      <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Add sponsor'}</button>
+    </form>
+  );
+}

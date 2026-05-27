@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useFixtures, useResults, useNews } from '@/data/hooks';
 import { LeagueTable } from '@/components/LeagueTable';
+import { SponsorsStrip } from '@/components/SponsorsStrip';
 
 export function Home() {
   const { data: fixtures } = useFixtures();
@@ -134,6 +135,8 @@ export function Home() {
           </div>
         </div>
       </section>
+
+      <SponsorsStrip />
     </>
   );
 }
