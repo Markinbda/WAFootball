@@ -1,16 +1,41 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 
 type TeamOption = { id: string; name: string };
+type AdminTab = 'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors';
+
+const VALID_TABS: AdminTab[] = ['news', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors'];
 
 export function AdminDashboard() {
   const { roles } = useAuth();
   const sb = getSupabase();
   const isAdmin = roles.includes('admin');
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [tab, setTab] = useState<'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors'>('news');
+  const initialTab = (searchParams.get('section') as AdminTab) ?? 'news';
+  const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : 'news');
+
+  // Sync tab → URL so the section is shareable / back-button friendly.
+  useEffect(() => {
+    if (searchParams.get('section') !== tab) {
+      const next = new URLSearchParams(searchParams);
+      next.set('section', tab);
+      setSearchParams(next, { replace: true });
+    }
+  }, [tab, searchParams, setSearchParams]);
+
+  // If the URL changes externally (e.g. user clicks a Coach Dashboard tile),
+  // reflect that in the active tab.
+  useEffect(() => {
+    const fromUrl = searchParams.get('section') as AdminTab | null;
+    if (fromUrl && VALID_TABS.includes(fromUrl) && fromUrl !== tab) {
+      setTab(fromUrl);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   useEffect(() => {
     if (!sb) return;
