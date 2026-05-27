@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useFixtures, useResults, useNews } from '@/data/hooks';
 import { LeagueTable } from '@/components/LeagueTable';
 import { SponsorsStrip } from '@/components/SponsorsStrip';
+import { NewsTicker } from '@/components/NewsTicker';
 
 export function Home() {
   const { data: fixtures } = useFixtures();
@@ -45,6 +46,8 @@ export function Home() {
           </div>
         </div>
       </section>
+
+      <NewsTicker />
 
       {/* QUICK INFO */}
       <section className="container-page grid gap-6 py-12 md:grid-cols-3">
