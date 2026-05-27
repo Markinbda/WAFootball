@@ -1,5 +1,7 @@
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/auth/AuthProvider';
+import { getSupabase } from '@/lib/supabase';
 import { TEAMS, UPCOMING_FIXTURES } from '@/data/seed';
 
 const QUICK_ACTIONS: { title: string; desc: string; to: string }[] = [
@@ -9,11 +11,69 @@ const QUICK_ACTIONS: { title: string; desc: string; to: string }[] = [
   { title: 'Photos', desc: 'Upload match-day gallery', to: '/admin?section=gallery' },
 ];
 
+type EmulatedTeam = { id: string; name: string; slug: string; age_group: string | null };
+
 export function CoachDashboard() {
   const { user, roles } = useAuth();
+  const sb = getSupabase();
+  const [searchParams] = useSearchParams();
+  const asId = searchParams.get('as');
+  const isAdmin = roles.includes('admin');
+  const emulating = isAdmin && !!asId;
+
+  const [emName, setEmName] = useState<string | null>(null);
+  const [emTeams, setEmTeams] = useState<EmulatedTeam[] | null>(null);
+
+  useEffect(() => {
+    if (!sb || !emulating || !asId) {
+      setEmName(null);
+      setEmTeams(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const [{ data: prof }, { data: tc }] = await Promise.all([
+        sb.from('profiles').select('display_name').eq('id', asId).maybeSingle(),
+        sb
+          .from('team_coaches')
+          .select('teams:teams(id,name,slug,age_group)')
+          .eq('user_id', asId),
+      ]);
+      if (cancelled) return;
+      setEmName((prof as { display_name?: string } | null)?.display_name ?? '(unknown user)');
+      const raw = (tc ?? []) as unknown as { teams: EmulatedTeam | EmulatedTeam[] | null }[];
+      const list: EmulatedTeam[] = [];
+      for (const r of raw) {
+        if (!r.teams) continue;
+        if (Array.isArray(r.teams)) list.push(...r.teams);
+        else list.push(r.teams);
+      }
+      setEmTeams(list);
+    })();
+    return () => { cancelled = true; };
+  }, [sb, emulating, asId]);
+
+  const teamsToShow = useMemo(() => {
+    if (emulating && emTeams) {
+      return emTeams.map((t) => ({ slug: t.slug, name: t.name, ageGroup: t.age_group ?? '' }));
+    }
+    return TEAMS.slice(0, 4).map((t) => ({ slug: t.slug, name: t.name, ageGroup: t.ageGroup }));
+  }, [emulating, emTeams]);
 
   return (
     <div className="container-page py-12">
+      {emulating && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+          <div>
+            <span className="font-semibold">Viewing as {emName ?? '…'}</span>
+            <span className="ml-2 text-xs text-amber-800">
+              ({emTeams?.length ?? 0} team{emTeams?.length === 1 ? '' : 's'})
+            </span>
+          </div>
+          <Link to="/coach" className="font-semibold underline">Exit emulation</Link>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-xs font-semibold uppercase tracking-widest text-gold">Coach Dashboard</div>
@@ -34,8 +94,11 @@ export function CoachDashboard() {
           <p className="mt-1 text-sm text-slate-600">
             Pick a squad to manage rosters, attendance, and comms.
           </p>
+          {emulating && emTeams && emTeams.length === 0 && (
+            <p className="mt-3 text-sm text-slate-500">This coach has no team assignments yet.</p>
+          )}
           <ul className="mt-4 divide-y divide-slate-200">
-            {TEAMS.slice(0, 4).map((t) => (
+            {teamsToShow.map((t) => (
               <li key={t.slug} className="flex items-center justify-between py-3">
                 <div>
                   <div className="font-semibold text-navy">{t.name}</div>
