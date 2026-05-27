@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { useTeams, useFixtures, useResults } from '@/data/hooks';
 import { PlayerRoster } from '@/components/PlayerRoster';
+import { useTrainingSessions, WEEKDAYS_LONG, fmtTime } from '@/data/phase6';
 
 export function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -124,7 +125,32 @@ export function TeamDetail() {
         <div className="mt-6">
           <PlayerRoster teamId={team.id} />
         </div>
+        <TrainingBlock teamId={team.id} />
       </div>
     </>
+  );
+}
+
+function TrainingBlock({ teamId }: { teamId?: string }) {
+  const { sessions, loading } = useTrainingSessions(teamId);
+  if (loading || sessions.length === 0) return null;
+  return (
+    <div className="mt-12">
+      <h2 className="text-2xl">Training</h2>
+      <ul className="mt-4 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+        {sessions.map((s) => (
+          <li key={s.id} className="grid grid-cols-[120px_1fr_auto] items-center gap-3 px-4 py-3 text-sm">
+            <div className="font-display text-base text-navy">{WEEKDAYS_LONG[s.weekday]}</div>
+            <div className="text-slate-700">
+              {s.location ?? 'Warwick Academy Pitch'}
+              {s.notes && <div className="text-xs text-slate-500">{s.notes}</div>}
+            </div>
+            <div className="text-right font-mono text-xs text-slate-600">
+              {fmtTime(s.starts_at)}{s.ends_at ? `–${fmtTime(s.ends_at)}` : ''}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

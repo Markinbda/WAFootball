@@ -10,7 +10,7 @@ export function AdminDashboard() {
   const isAdmin = roles.includes('admin');
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [tab, setTab] = useState<'news' | 'fixture' | 'players'>('news');
+  const [tab, setTab] = useState<'news' | 'fixture' | 'players' | 'teams' | 'training'>('news');
 
   useEffect(() => {
     if (!sb) return;
@@ -55,12 +55,26 @@ export function AdminDashboard() {
         >
           Players
         </button>
+        <button
+          onClick={() => setTab('teams')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'teams' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Team photos
+        </button>
+        <button
+          onClick={() => setTab('training')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'training' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Training
+        </button>
       </div>
 
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'players' && <PlayerForm teams={teams} />}
+        {tab === 'teams' && <TeamPhotoForm teams={teams} />}
+        {tab === 'training' && <TrainingForm teams={teams} />}
       </div>
     </div>
   );
@@ -329,6 +343,124 @@ function PlayerForm({ teams }: { teams: TeamOption[] }) {
       <button type="submit" className="btn-primary" disabled={busy}>
         {busy ? 'Saving…' : 'Add player'}
       </button>
+    </form>
+  );
+}
+
+function TeamPhotoForm({ teams }: { teams: TeamOption[] }) {
+  const sb = getSupabase()!;
+  const [teamId, setTeamId] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!teamId || !file) return;
+    setBusy(true); setStatus(null);
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const path = `${teamId}/banner-${Date.now()}.${ext}`;
+    const { error: upErr } = await sb.storage
+      .from('team-media')
+      .upload(path, file, { upsert: true, contentType: file.type });
+    if (upErr) { setStatus(`Upload error: ${upErr.message}`); setBusy(false); return; }
+    const publicUrl = sb.storage.from('team-media').getPublicUrl(path).data.publicUrl;
+    const { error } = await sb.from('teams').update({ photo_url: publicUrl }).eq('id', teamId);
+    setBusy(false);
+    if (error) setStatus(`Error: ${error.message}`);
+    else { setStatus('Team photo updated.'); setFile(null); }
+  }
+
+  return (
+    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
+      <h2 className="text-xl font-semibold">Upload team photo</h2>
+      <p className="text-sm text-slate-600">Replaces the banner shown on the team page header.</p>
+      <Field label="Team">
+        <select required value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
+          <option value="">Select…</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Photo">
+        <input
+          required
+          type="file"
+          accept="image/*"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-600"
+        />
+      </Field>
+      {status && (
+        <p className={`text-sm ${status.startsWith('Error') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>{status}</p>
+      )}
+      <button type="submit" className="btn-primary" disabled={busy || !file || !teamId}>
+        {busy ? 'Uploading…' : 'Save photo'}
+      </button>
+    </form>
+  );
+}
+
+function TrainingForm({ teams }: { teams: TeamOption[] }) {
+  const sb = getSupabase()!;
+  const [teamId, setTeamId] = useState('');
+  const [weekday, setWeekday] = useState('2');
+  const [startsAt, setStartsAt] = useState('17:00');
+  const [endsAt, setEndsAt] = useState('18:30');
+  const [location, setLocation] = useState('Warwick Academy Pitch');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!teamId) return;
+    setBusy(true); setStatus(null);
+    const { error } = await sb.from('training_sessions').insert({
+      team_id: teamId,
+      weekday: Number(weekday),
+      starts_at: startsAt,
+      ends_at: endsAt || null,
+      location: location || null,
+      notes: notes || null,
+      active: true,
+    });
+    setBusy(false);
+    if (error) setStatus(`Error: ${error.message}`);
+    else { setStatus('Training session added.'); setNotes(''); }
+  }
+
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  return (
+    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
+      <h2 className="text-xl font-semibold">Add training session</h2>
+      <Field label="Team">
+        <select required value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
+          <option value="">Select…</option>
+          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+      </Field>
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Day">
+          <select value={weekday} onChange={(e) => setWeekday(e.target.value)} className="input">
+            {days.map((d, i) => <option key={d} value={i}>{d}</option>)}
+          </select>
+        </Field>
+        <Field label="Starts">
+          <input required type="time" value={startsAt} onChange={(e) => setStartsAt(e.target.value)} className="input" />
+        </Field>
+        <Field label="Ends">
+          <input type="time" value={endsAt} onChange={(e) => setEndsAt(e.target.value)} className="input" />
+        </Field>
+      </div>
+      <Field label="Location">
+        <input value={location} onChange={(e) => setLocation(e.target.value)} className="input" />
+      </Field>
+      <Field label="Notes">
+        <input value={notes} onChange={(e) => setNotes(e.target.value)} className="input" />
+      </Field>
+      {status && <p className={`text-sm ${status.startsWith('Error') ? 'text-red-700' : 'text-pitch'}`}>{status}</p>}
+      <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving…' : 'Add session'}</button>
     </form>
   );
 }
