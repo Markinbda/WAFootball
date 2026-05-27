@@ -510,6 +510,10 @@ function EventModal({
   const [notes, setNotes]           = useState(existing?.notes ?? '');
   const [repeats, setRepeats]       = useState(false);
   const [repeatWeeks, setRepeatWeeks] = useState(8);
+  // Days of week to repeat on (0 = Sun ... 6 = Sat). Defaults to the chosen
+  // start date's weekday so behaviour matches the old "same day" preset.
+  const initialDow = (startDate ?? new Date(`${isoDateKey(new Date())}T00:00:00`)).getDay();
+  const [repeatDays, setRepeatDays] = useState<number[]>([initialDow]);
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -541,13 +545,28 @@ function EventModal({
       return;
     }
 
-    if (kind === 'practice' && repeats && repeatWeeks > 1) {
+    if (kind === 'practice' && repeats && repeatWeeks > 0) {
       const groupId = uuid();
-      const rows = Array.from({ length: repeatWeeks }, (_, i) => ({
-        ...base,
-        starts_at: new Date(new Date(starts_at).getTime() + i * 7 * MS_DAY).toISOString(),
-        repeat_group_id: groupId,
-      }));
+      const baseDate = new Date(starts_at);
+      const baseDow = baseDate.getDay();
+      const days = (repeatDays.length > 0 ? repeatDays : [baseDow])
+        .slice()
+        .sort((a, b) => a - b);
+      const rows: typeof base[] = [];
+      for (let w = 0; w < repeatWeeks; w++) {
+        for (const d of days) {
+          const dayDelta = (d - baseDow) + w * 7;
+          // For the first week, skip days that fall before the chosen start date.
+          if (dayDelta < 0) continue;
+          const ts = new Date(baseDate.getTime() + dayDelta * MS_DAY).toISOString();
+          rows.push({ ...base, starts_at: ts, repeat_group_id: groupId } as typeof base);
+        }
+      }
+      if (rows.length === 0) {
+        setBusy(false);
+        setFormError('Select at least one day of the week.');
+        return;
+      }
       const { data, error } = await sb.from('team_events').insert(rows).select('*');
       setBusy(false);
       if (error) { setFormError(error.message); return; }
@@ -624,17 +643,56 @@ function EventModal({
                     Repeats weekly
                   </label>
                   {repeats && (
-                    <div className="mt-2 flex items-center gap-2 text-sm text-slate-700">
-                      for
-                      <input
-                        type="number"
-                        min={2}
-                        max={52}
-                        value={repeatWeeks}
-                        onChange={(e) => setRepeatWeeks(Math.max(2, Math.min(52, Number(e.target.value) || 2)))}
-                        className="input w-20"
-                      />
-                      weeks (same day &amp; time)
+                    <div className="mt-3 space-y-3 text-sm text-slate-700">
+                      <div>
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Days of the week</div>
+                        <div className="flex flex-wrap gap-1">
+                          {[
+                            { d: 0, label: 'Sun' },
+                            { d: 1, label: 'Mon' },
+                            { d: 2, label: 'Tue' },
+                            { d: 3, label: 'Wed' },
+                            { d: 4, label: 'Thu' },
+                            { d: 5, label: 'Fri' },
+                            { d: 6, label: 'Sat' },
+                          ].map(({ d, label }) => {
+                            const active = repeatDays.includes(d);
+                            return (
+                              <button
+                                key={d}
+                                type="button"
+                                onClick={() =>
+                                  setRepeatDays((prev) =>
+                                    prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d]
+                                  )
+                                }
+                                className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                                  active
+                                    ? 'border-navy bg-navy text-white'
+                                    : 'border-slate-300 bg-white text-slate-600 hover:border-navy hover:text-navy'
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Events use the time above. The start date's weekday is selected by default.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        for
+                        <input
+                          type="number"
+                          min={1}
+                          max={52}
+                          value={repeatWeeks}
+                          onChange={(e) => setRepeatWeeks(Math.max(1, Math.min(52, Number(e.target.value) || 1)))}
+                          className="input w-20"
+                        />
+                        weeks
+                      </div>
                     </div>
                   )}
                 </div>
