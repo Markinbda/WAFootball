@@ -660,8 +660,7 @@ type CoachAssignmentRow = {
   team_id: string;
   user_id: string;
   created_at: string;
-  teams: { id: string; name: string; slug: string } | null;
-  profiles: { id: string; display_name: string } | null;
+  teams: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[] | null;
 };
 
 type CoachGroup = {
@@ -688,7 +687,7 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
     const [{ data: tc, error: tcErr }, { data: prof }] = await Promise.all([
       sb
         .from('team_coaches')
-        .select('team_id, user_id, created_at, teams:teams(id,name,slug), profiles:profiles(id,display_name)')
+        .select('team_id, user_id, created_at, teams:teams(id,name,slug)')
         .order('created_at', { ascending: true }),
       sb.from('profiles').select('id, display_name').order('display_name'),
     ]);
@@ -707,18 +706,20 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
   }, []);
 
   const groups: CoachGroup[] = useMemo(() => {
+    const nameById = new Map(profiles.map((p) => [p.id, p.display_name]));
     const byUser = new Map<string, CoachGroup>();
     for (const r of rows) {
       if (!r.user_id) continue;
-      const name = r.profiles?.display_name ?? '(unknown user)';
+      const name = nameById.get(r.user_id) ?? '(unknown user)';
       const g = byUser.get(r.user_id) ?? { userId: r.user_id, displayName: name, teams: [] };
-      if (r.teams) g.teams.push(r.teams);
+      const teamList = Array.isArray(r.teams) ? r.teams : r.teams ? [r.teams] : [];
+      for (const t of teamList) g.teams.push(t);
       byUser.set(r.user_id, g);
     }
     const list = Array.from(byUser.values());
     list.sort((a, b) => a.displayName.localeCompare(b.displayName));
     return list;
-  }, [rows]);
+  }, [rows, profiles]);
 
   const filteredGroups = useMemo(() => {
     if (!search.trim()) return groups;
