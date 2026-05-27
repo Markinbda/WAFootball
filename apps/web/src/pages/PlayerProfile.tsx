@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { usePlayerProfile } from '@/data/phase4';
+import { usePlayerProfile, usePlayerGuardians, type PlayerGuardian } from '@/data/phase4';
+import { useAuth } from '@/auth/AuthProvider';
+import { getSupabase } from '@/lib/supabase';
 
 export function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
@@ -59,6 +62,8 @@ export function PlayerProfile() {
       </div>
 
       <SeasonChart events={events} />
+
+      <GuardiansSection playerId={player.id} teamId={player.team_id} />
 
       <div className="container-page pb-16">
         <h2 className="text-2xl">Match log</h2>
@@ -161,3 +166,195 @@ const LABEL: Record<string, string> = {
   halftime: 'Half-time',
   fulltime: 'Full-time',
 };
+
+// ---------------------------------------------------------------------------
+// Guardians (parental contacts) — visible to admin / coach of player's team
+// ---------------------------------------------------------------------------
+function GuardiansSection({ playerId, teamId }: { playerId: string; teamId: string }) {
+  const { roles, user } = useAuth();
+  const sb = getSupabase();
+  const [isTeamCoach, setIsTeamCoach] = useState(false);
+  const { guardians, loading, reload } = usePlayerGuardians(playerId);
+
+  useEffect(() => {
+    if (!sb || !user) { setIsTeamCoach(false); return; }
+    let active = true;
+    (async () => {
+      const { data } = await sb
+        .from('team_coaches')
+        .select('team_id')
+        .eq('team_id', teamId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (active) setIsTeamCoach(!!data);
+    })();
+    return () => { active = false; };
+  }, [sb, user, teamId]);
+
+  const canEdit = roles.includes('admin') || isTeamCoach;
+  const canSee  = canEdit; // RLS will also block non-authorized viewers
+
+  if (!canSee) return null;
+
+  return (
+    <div className="container-page pb-6">
+      <h2 className="text-2xl">Parents &amp; guardians</h2>
+      <p className="mt-1 text-sm text-slate-500">
+        Contact details for this player\u2019s parents or guardians. Visible to coaches and admins only.
+      </p>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-slate-500">Loading\u2026</p>
+      ) : guardians.length === 0 ? (
+        <p className="mt-4 text-sm text-slate-500">No guardians on file yet.</p>
+      ) : (
+        <ul className="mt-4 grid gap-3 md:grid-cols-2">
+          {guardians.map((g) => (
+            <GuardianCard key={g.id} g={g} canEdit={canEdit} onChanged={reload} />
+          ))}
+        </ul>
+      )}
+      {canEdit && <AddGuardianForm playerId={playerId} onAdded={reload} />}
+    </div>
+  );
+}
+
+function GuardianCard({
+  g,
+  canEdit,
+  onChanged,
+}: {
+  g: PlayerGuardian;
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const sb = getSupabase();
+  async function remove() {
+    if (!sb) return;
+    if (!confirm(`Remove ${g.guardian_name ?? 'this guardian'}?`)) return;
+    await sb.from('player_guardians').delete().eq('id', g.id);
+    onChanged();
+  }
+  return (
+    <li className="card p-4 text-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <div className="font-display text-lg text-navy">{g.guardian_name ?? 'Guardian'}</div>
+          <div className="text-xs uppercase tracking-wider text-slate-500">
+            {g.relationship ?? 'parent'}
+          </div>
+        </div>
+        {canEdit && (
+          <button
+            onClick={remove}
+            className="text-xs font-semibold text-red-700 hover:underline"
+            type="button"
+          >
+            Remove
+          </button>
+        )}
+      </div>
+      <dl className="mt-3 space-y-1 text-slate-700">
+        {g.guardian_phone && (
+          <div className="flex gap-2"><dt className="w-14 text-slate-500">Phone</dt>
+            <dd><a className="hover:underline" href={`tel:${g.guardian_phone}`}>{g.guardian_phone}</a></dd>
+          </div>
+        )}
+        {g.guardian_email && (
+          <div className="flex gap-2"><dt className="w-14 text-slate-500">Email</dt>
+            <dd><a className="hover:underline" href={`mailto:${g.guardian_email}`}>{g.guardian_email}</a></dd>
+          </div>
+        )}
+        {g.notes && (
+          <div className="flex gap-2"><dt className="w-14 text-slate-500">Notes</dt>
+            <dd>{g.notes}</dd>
+          </div>
+        )}
+      </dl>
+    </li>
+  );
+}
+
+function AddGuardianForm({ playerId, onAdded }: { playerId: string; onAdded: () => void }) {
+  const sb = getSupabase();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [relationship, setRelationship] = useState('parent');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-4 btn-primary"
+      >
+        Add guardian
+      </button>
+    );
+  }
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sb) return;
+    setBusy(true); setStatus(null);
+    const { error } = await sb.from('player_guardians').insert({
+      player_id: playerId,
+      user_id: null,
+      relationship: relationship || 'parent',
+      guardian_name: name || null,
+      guardian_email: email || null,
+      guardian_phone: phone || null,
+      notes: notes || null,
+    });
+    setBusy(false);
+    if (error) { setStatus(`Error: ${error.message}`); return; }
+    setName(''); setEmail(''); setPhone(''); setNotes(''); setRelationship('parent');
+    setOpen(false);
+    onAdded();
+  }
+
+  return (
+    <form onSubmit={submit} className="card mt-4 max-w-2xl space-y-3 p-5">
+      <h3 className="font-display text-lg text-navy">Add guardian</h3>
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-700">Name</span>
+          <input className="input mt-1" required value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-700">Relationship</span>
+          <select className="input mt-1" value={relationship} onChange={(e) => setRelationship(e.target.value)}>
+            <option value="parent">Parent</option>
+            <option value="mother">Mother</option>
+            <option value="father">Father</option>
+            <option value="guardian">Guardian</option>
+            <option value="grandparent">Grandparent</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-700">Phone</span>
+          <input className="input mt-1" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-semibold text-slate-700">Email</span>
+          <input className="input mt-1" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </label>
+      </div>
+      <label className="block text-sm">
+        <span className="font-semibold text-slate-700">Notes</span>
+        <textarea className="input mt-1" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+      </label>
+      {status && <p className="text-sm text-red-700">{status}</p>}
+      <div className="flex gap-2">
+        <button type="submit" className="btn-primary" disabled={busy}>{busy ? 'Saving\u2026' : 'Save guardian'}</button>
+        <button type="button" className="rounded border border-slate-300 px-3 py-2 text-sm" onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </form>
+  );
+}

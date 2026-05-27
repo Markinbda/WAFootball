@@ -234,3 +234,48 @@ export function useNotifications() {
 
   return { items, dismiss };
 }
+
+// ---------------------------------------------------------------------------
+// Player guardians (parental contact info)
+// ---------------------------------------------------------------------------
+export type PlayerGuardian = {
+  id: string;
+  player_id: string;
+  user_id: string | null;
+  relationship: string | null;
+  guardian_name: string | null;
+  guardian_email: string | null;
+  guardian_phone: string | null;
+  notes: string | null;
+};
+
+export function usePlayerGuardians(playerId: string | undefined) {
+  const [guardians, setGuardians] = useState<PlayerGuardian[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [canRead, setCanRead] = useState(true);
+
+  const reload = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb || !playerId) { setLoading(false); return; }
+    setLoading(true);
+    const { data, error } = await sb
+      .from('player_guardians')
+      .select('id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone, notes')
+      .eq('player_id', playerId)
+      .order('created_at', { ascending: true });
+    if (error) {
+      // RLS will silently return empty for non-authorized; treat any error as no-access
+      setCanRead(false);
+      setGuardians([]);
+    } else {
+      setCanRead(true);
+      setGuardians((data ?? []) as PlayerGuardian[]);
+    }
+    setLoading(false);
+  }, [playerId]);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  return { guardians, loading, canRead, reload };
+}
+

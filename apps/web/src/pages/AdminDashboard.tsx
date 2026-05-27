@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
+import { usePlayers } from '@/data/phase3';
 
 type TeamOption = { id: string; name: string };
 type AdminTab = 'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
@@ -117,7 +118,7 @@ export function AdminDashboard() {
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
-        {tab === 'players' && <PlayerForm teams={teams} />}
+        {tab === 'players' && <PlayersPanel teams={teams} />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
         {tab === 'training' && <TrainingForm teams={teams} />}
         {tab === 'gallery' && <GalleryForm teams={teams} />}
@@ -290,9 +291,98 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function PlayerForm({ teams }: { teams: TeamOption[] }) {
+function PlayersPanel({ teams }: { teams: TeamOption[] }) {
+  const [teamId, setTeamId] = useState<string>('');
+
+  // Default selection to first team once teams arrive.
+  useEffect(() => {
+    if (!teamId && teams.length > 0) setTeamId(teams[0].id);
+  }, [teams, teamId]);
+
+  const { players, loading, reload } = usePlayers(teamId || undefined);
+  const sorted = [...players].sort((a, b) => {
+    const an = a.squad_number ?? 9999;
+    const bn = b.squad_number ?? 9999;
+    if (an !== bn) return an - bn;
+    return a.full_name.localeCompare(b.full_name);
+  });
+
+  return (
+    <div className="space-y-6">
+      <div className="card max-w-2xl p-6">
+        <h2 className="text-xl font-semibold">Squad</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Pick a team to view its current players. Click any player to open the full
+          profile, including parental contact information.
+        </p>
+        <div className="mt-4">
+          <Field label="Team">
+            <select
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+              className="input"
+            >
+              {teams.length === 0 && <option value="">No teams yet</option>}
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        <div className="mt-5">
+          {loading ? (
+            <p className="text-sm text-slate-500">Loading squad…</p>
+          ) : sorted.length === 0 ? (
+            <p className="text-sm text-slate-500">No players on this team yet.</p>
+          ) : (
+            <ul className="divide-y divide-slate-100 rounded border border-slate-200">
+              {sorted.map((p) => (
+                <li key={p.id}>
+                  <Link
+                    to={`/players/${p.id}`}
+                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50"
+                  >
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gold font-display text-xs text-navy">
+                      {p.squad_number ?? '—'}
+                    </span>
+                    <span className="flex-1 font-semibold text-navy">{p.full_name}</span>
+                    <span className="text-xs uppercase tracking-wider text-slate-500">
+                      {p.position ?? '—'}
+                    </span>
+                    {!p.active && (
+                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                        Inactive
+                      </span>
+                    )}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      <PlayerForm teams={teams} teamId={teamId} onTeamChange={setTeamId} onCreated={reload} />
+    </div>
+  );
+}
+
+function PlayerForm({
+  teams,
+  teamId: teamIdProp,
+  onTeamChange,
+  onCreated,
+}: {
+  teams: TeamOption[];
+  teamId?: string;
+  onTeamChange?: (id: string) => void;
+  onCreated?: () => void;
+}) {
   const sb = getSupabase()!;
-  const [teamId, setTeamId] = useState('');
+  const [teamIdLocal, setTeamIdLocal] = useState('');
+  const teamId = teamIdProp ?? teamIdLocal;
+  const setTeamId = onTeamChange ?? setTeamIdLocal;
   const [fullName, setFullName] = useState('');
   const [position, setPosition] = useState('');
   const [squadNumber, setSquadNumber] = useState('');
@@ -333,6 +423,7 @@ function PlayerForm({ teams }: { teams: TeamOption[] }) {
     else {
       setStatus('Player added.');
       setFullName(''); setPosition(''); setSquadNumber(''); setBio(''); setFile(null);
+      onCreated?.();
     }
   }
 
