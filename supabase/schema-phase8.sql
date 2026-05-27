@@ -32,15 +32,7 @@ drop policy if exists "team_coaches write" on public.team_coaches;
 
 create policy "team_coaches read"
   on public.team_coaches for select
-  using (
-    public.has_role('admin')
-    or user_id = auth.uid()
-    or exists (
-      select 1 from public.player_guardians pg
-      join public.players p on p.id = pg.player_id
-      where p.team_id = team_coaches.team_id and pg.user_id = auth.uid()
-    )
-  );
+  using (auth.role() = 'authenticated');
 
 create policy "team_coaches write"
   on public.team_coaches for all
