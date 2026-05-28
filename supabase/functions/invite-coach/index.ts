@@ -103,6 +103,14 @@ serve(async (req) => {
   let userId: string | null = null;
   let invited = false;       // true when this call created a fresh invitation
   let resent = false;        // true when we re-sent a magic-link to an existing user
+  let emailSent = false;     // false when we hit a rate-limit but still set the user up
+  let emailNote: string | null = null;
+
+  async function findUserIdByEmail(): Promise<string | null> {
+    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (listErr) throw new Error(`Lookup failed: ${listErr.message}`);
+    return list.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null;
+  }
 
   const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: display_name },
@@ -110,28 +118,54 @@ serve(async (req) => {
   });
 
   if (invErr) {
-    // If the user already exists, find them, then re-send a magic-link so the
-    // admin can effectively "invite again" without errors.
     const msg = invErr.message?.toLowerCase() ?? '';
-    if (msg.includes('already') || msg.includes('registered')) {
-      const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
-      if (listErr) return json({ error: `Lookup failed: ${listErr.message}` }, 500);
-      const match = list.users.find((u) => u.email?.toLowerCase() === email);
-      if (!match) return json({ error: 'User reported existing but not found' }, 500);
-      userId = match.id;
+    const isAlready = msg.includes('already') || msg.includes('registered');
+    const isRate = msg.includes('rate limit') || msg.includes('too many');
 
-      // Re-send a magic-link sign-in email. This works whether or not the
-      // original invite was accepted, and uses the same branded template.
+    if (isAlready) {
+      // User exists — find them, try re-sending a magic-link.
+      userId = await findUserIdByEmail();
+      if (!userId) return json({ error: 'User reported existing but not found' }, 500);
       const { error: linkErr } = await admin.auth.admin.generateLink({
         type: 'magiclink',
         email,
         options: { redirectTo: redirect_to },
       });
       if (linkErr) {
-        // Non-fatal — surface the warning but keep the role/team upserts going.
+        const linkMsg = linkErr.message?.toLowerCase() ?? '';
+        if (linkMsg.includes('rate limit') || linkMsg.includes('too many')) {
+          emailNote = 'Magic-link not re-sent: email rate limit reached. They can use Forgot Password later, or wait ~1 hour.';
+        } else {
+          emailNote = `Magic-link not re-sent: ${linkErr.message}`;
+        }
         console.warn('[invite-coach] generateLink failed:', linkErr.message);
       } else {
         resent = true;
+        emailSent = true;
+      }
+    } else if (isRate) {
+      // Rate-limited on FIRST invite. The user may or may not have been
+      // created by a prior partial attempt — check before giving up.
+      userId = await findUserIdByEmail();
+      if (userId) {
+        // They exist from a prior attempt; continue and grant role.
+        emailNote = 'Email rate limit reached — user already exists, role granted but no fresh email sent.';
+      } else {
+        // Create the account without sending an email so admin work isn't blocked.
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email,
+          email_confirm: false,
+          user_metadata: { full_name: display_name },
+        });
+        if (createErr || !created.user) {
+          return json({
+            error:
+              'Email rate limit reached and user could not be auto-created. Wait ~1 hour or configure custom SMTP under Auth → Settings → SMTP. ' +
+              (createErr?.message ?? ''),
+          }, 429);
+        }
+        userId = created.user.id;
+        emailNote = 'Created account without sending email (project rate limit). Ask them to use Forgot Password from the login page, or re-invite in ~1 hour.';
       }
     } else {
       return json({ error: `Invite failed: ${invErr.message}` }, 500);
@@ -139,6 +173,7 @@ serve(async (req) => {
   } else if (inv.user) {
     userId = inv.user.id;
     invited = true;
+    emailSent = true;
   }
   if (!userId) return json({ error: 'Could not resolve user id' }, 500);
 
@@ -165,5 +200,5 @@ serve(async (req) => {
     if (teamErr) return json({ error: `Team assign failed: ${teamErr.message}` }, 500);
   }
 
-  return json({ ok: true, user_id: userId, invited, resent });
+  return json({ ok: true, user_id: userId, invited, resent, email_sent: emailSent, email_note: emailNote });
 });

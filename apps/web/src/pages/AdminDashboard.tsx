@@ -1142,18 +1142,24 @@ function InviteCoachForm({
         setStatus(`Invite failed: ${error.message}`);
         return;
       }
-      const body = data as { ok?: boolean; error?: string; invited?: boolean; resent?: boolean } | null;
+      const body = data as {
+        ok?: boolean;
+        error?: string;
+        invited?: boolean;
+        resent?: boolean;
+        email_sent?: boolean;
+        email_note?: string | null;
+      } | null;
       if (!body?.ok) {
         setStatus(`Invite failed: ${body?.error ?? 'unknown error'}`);
         return;
       }
-      setStatus(
-        body.invited
-          ? `Invite sent to ${email}. They will receive a magic-link email.`
-          : body.resent
-            ? `User ${email} already existed — a fresh sign-in link has been re-sent and coach role granted.`
-            : `User ${email} already existed — profile updated and coach role granted (no email re-sent).`,
-      );
+      const base = body.invited
+        ? `Invite sent to ${email}. They will receive a magic-link email.`
+        : body.resent
+          ? `User ${email} already existed — a fresh sign-in link has been re-sent and coach role granted.`
+          : `User ${email} already existed — profile updated and coach role granted (no email re-sent).`;
+      setStatus(body.email_note ? `${base}\n\n⚠ ${body.email_note}` : base);
       setEmail('');
       setDisplayName('');
       setTitle('');
@@ -1219,7 +1225,7 @@ function InviteCoachForm({
         </Field>
       </div>
       {status && (
-        <p className={`text-sm ${status.startsWith('Invite failed') ? 'text-red-700' : 'text-pitch'}`}>
+        <p className={`whitespace-pre-line text-sm ${status.startsWith('Invite failed') ? 'text-red-700' : 'text-pitch'}`}>
           {status}
         </p>
       )}
