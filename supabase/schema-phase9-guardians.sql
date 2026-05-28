@@ -104,3 +104,10 @@ create policy "player_guardians write"
       where tc.team_id = p.team_id and tc.user_id = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------------------------
+-- 4) Data API grants (future-proof for Supabase 2026-10-30 default change)
+--    RLS still governs row access; these only expose the table to PostgREST.
+-- ---------------------------------------------------------------------------
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on public.player_guardians to authenticated;
