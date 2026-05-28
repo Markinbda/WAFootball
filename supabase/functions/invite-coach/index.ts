@@ -101,26 +101,44 @@ serve(async (req) => {
 
   // ---- 4. Invite (or look up existing) user ----
   let userId: string | null = null;
-  const { data: invited, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
+  let invited = false;       // true when this call created a fresh invitation
+  let resent = false;        // true when we re-sent a magic-link to an existing user
+
+  const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: display_name },
     redirectTo: redirect_to,
   });
 
   if (invErr) {
-    // If the user already exists, find them and continue (idempotent).
+    // If the user already exists, find them, then re-send a magic-link so the
+    // admin can effectively "invite again" without errors.
     const msg = invErr.message?.toLowerCase() ?? '';
     if (msg.includes('already') || msg.includes('registered')) {
-      // listUsers paginates — find by email.
       const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
       if (listErr) return json({ error: `Lookup failed: ${listErr.message}` }, 500);
       const match = list.users.find((u) => u.email?.toLowerCase() === email);
       if (!match) return json({ error: 'User reported existing but not found' }, 500);
       userId = match.id;
+
+      // Re-send a magic-link sign-in email. This works whether or not the
+      // original invite was accepted, and uses the same branded template.
+      const { error: linkErr } = await admin.auth.admin.generateLink({
+        type: 'magiclink',
+        email,
+        options: { redirectTo: redirect_to },
+      });
+      if (linkErr) {
+        // Non-fatal — surface the warning but keep the role/team upserts going.
+        console.warn('[invite-coach] generateLink failed:', linkErr.message);
+      } else {
+        resent = true;
+      }
     } else {
       return json({ error: `Invite failed: ${invErr.message}` }, 500);
     }
-  } else if (invited.user) {
-    userId = invited.user.id;
+  } else if (inv.user) {
+    userId = inv.user.id;
+    invited = true;
   }
   if (!userId) return json({ error: 'Could not resolve user id' }, 500);
 
@@ -147,5 +165,5 @@ serve(async (req) => {
     if (teamErr) return json({ error: `Team assign failed: ${teamErr.message}` }, 500);
   }
 
-  return json({ ok: true, user_id: userId, invited: !invErr });
+  return json({ ok: true, user_id: userId, invited, resent });
 });

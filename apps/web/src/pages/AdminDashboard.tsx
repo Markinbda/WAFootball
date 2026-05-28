@@ -1142,7 +1142,7 @@ function InviteCoachForm({
         setStatus(`Invite failed: ${error.message}`);
         return;
       }
-      const body = data as { ok?: boolean; error?: string; invited?: boolean } | null;
+      const body = data as { ok?: boolean; error?: string; invited?: boolean; resent?: boolean } | null;
       if (!body?.ok) {
         setStatus(`Invite failed: ${body?.error ?? 'unknown error'}`);
         return;
@@ -1150,7 +1150,9 @@ function InviteCoachForm({
       setStatus(
         body.invited
           ? `Invite sent to ${email}. They will receive a magic-link email.`
-          : `User ${email} already existed — profile updated and coach role granted.`,
+          : body.resent
+            ? `User ${email} already existed — a fresh sign-in link has been re-sent and coach role granted.`
+            : `User ${email} already existed — profile updated and coach role granted (no email re-sent).`,
       );
       setEmail('');
       setDisplayName('');
