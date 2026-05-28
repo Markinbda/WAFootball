@@ -99,6 +99,17 @@ serve(async (req) => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
+  // Per-call timeout — Supabase admin endpoints occasionally hang under SMTP
+  // pressure, which would otherwise leave the whole HTTP request unresponsive.
+  async function withTimeout<T>(label: string, ms: number, p: Promise<T>): Promise<T> {
+    return await Promise.race<T>([
+      p,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms),
+      ),
+    ]);
+  }
+
   // ---- 4. Invite (or look up existing) user ----
   let userId: string | null = null;
   let invited = false;       // true when this call created a fresh invitation
@@ -108,7 +119,11 @@ serve(async (req) => {
 
   type AuthUserLite = { id: string; email?: string | null; deleted_at?: string | null };
   async function findUserByEmail(): Promise<AuthUserLite | null> {
-    const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    const { data: list, error: listErr } = await withTimeout(
+      'listUsers',
+      10_000,
+      admin.auth.admin.listUsers({ page: 1, perPage: 200 }),
+    );
     if (listErr) throw new Error(`Lookup failed: ${listErr.message}`);
     return (list.users as AuthUserLite[]).find((u) => u.email?.toLowerCase() === email) ?? null;
   }
@@ -133,10 +148,27 @@ serve(async (req) => {
     console.log('[invite-coach] hard-deleted soft-deleted user', existing.id);
   }
 
-  const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
-    data: { full_name: display_name },
-    redirectTo: redirect_to,
-  });
+  // Race the invite against a timeout. If Supabase Auth's SMTP backend is
+  // wedged (common under rate limits) the call can hang forever; treat a
+  // timeout as if we had received a rate-limit error and fall through to
+  // the createUser fallback below.
+  let inv: { user: { id: string } | null } | null = null;
+  let invErr: { message?: string } | null = null;
+  try {
+    const res = await withTimeout(
+      'inviteUserByEmail',
+      12_000,
+      admin.auth.admin.inviteUserByEmail(email, {
+        data: { full_name: display_name },
+        redirectTo: redirect_to,
+      }),
+    );
+    inv = res.data as { user: { id: string } | null } | null;
+    invErr = res.error as { message?: string } | null;
+  } catch (e) {
+    console.warn('[invite-coach] inviteUserByEmail timed out — treating as rate limit');
+    invErr = { message: 'rate limit (client-side timeout): ' + (e instanceof Error ? e.message : String(e)) };
+  }
 
   if (invErr) {
     const msg = invErr.message?.toLowerCase() ?? '';
@@ -147,11 +179,21 @@ serve(async (req) => {
       // User exists — find them, try re-sending a magic-link.
       userId = await findUserIdByEmail();
       if (!userId) return json({ error: 'User reported existing but not found' }, 500);
-      const { error: linkErr } = await admin.auth.admin.generateLink({
-        type: 'magiclink',
-        email,
-        options: { redirectTo: redirect_to },
-      });
+      let linkErr: { message?: string } | null = null;
+      try {
+        const linkRes = await withTimeout(
+          'generateLink',
+          10_000,
+          admin.auth.admin.generateLink({
+            type: 'magiclink',
+            email,
+            options: { redirectTo: redirect_to },
+          }),
+        );
+        linkErr = linkRes.error as { message?: string } | null;
+      } catch (e) {
+        linkErr = { message: 'rate limit (client-side timeout): ' + (e instanceof Error ? e.message : String(e)) };
+      }
       if (linkErr) {
         const linkMsg = linkErr.message?.toLowerCase() ?? '';
         if (linkMsg.includes('rate limit') || linkMsg.includes('too many')) {
@@ -173,11 +215,15 @@ serve(async (req) => {
         emailNote = 'Email rate limit reached — user already exists, role granted but no fresh email sent.';
       } else {
         // Create the account without sending an email so admin work isn't blocked.
-        const { data: created, error: createErr } = await admin.auth.admin.createUser({
-          email,
-          email_confirm: false,
-          user_metadata: { full_name: display_name },
-        });
+        const { data: created, error: createErr } = await withTimeout(
+          'createUser',
+          10_000,
+          admin.auth.admin.createUser({
+            email,
+            email_confirm: false,
+            user_metadata: { full_name: display_name },
+          }),
+        );
         if (createErr || !created.user) {
           return json({
             error:
