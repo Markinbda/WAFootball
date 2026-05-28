@@ -1129,7 +1129,8 @@ function InviteCoachForm({
     setBusy(true);
     setStatus(null);
     try {
-      const { data, error } = await sb.functions.invoke('invite-coach', {
+      // Hard timeout — don't let the UI hang forever if the function stalls.
+      const invokePromise = sb.functions.invoke('invite-coach', {
         body: {
           email: email.trim().toLowerCase(),
           display_name: displayName.trim(),
@@ -1138,8 +1139,23 @@ function InviteCoachForm({
           redirect_to: `${window.location.origin}/login`,
         },
       });
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out after 30s')), 30_000),
+      );
+      const { data, error } = (await Promise.race([invokePromise, timeoutPromise])) as Awaited<typeof invokePromise>;
       if (error) {
-        setStatus(`Invite failed: ${error.message}`);
+        // Try to surface the function's JSON error body even on non-2xx.
+        let detail = error.message;
+        const ctx = (error as { context?: { body?: unknown } }).context;
+        if (ctx?.body) {
+          try {
+            const parsed = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : ctx.body;
+            if (parsed && typeof parsed === 'object' && 'error' in parsed) {
+              detail = String((parsed as { error: unknown }).error);
+            }
+          } catch { /* ignore */ }
+        }
+        setStatus(`Invite failed: ${detail}`);
         return;
       }
       const body = data as {
