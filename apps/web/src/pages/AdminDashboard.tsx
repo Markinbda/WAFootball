@@ -757,10 +757,21 @@ type CoachAssignmentRow = {
 type CoachGroup = {
   userId: string;
   displayName: string;
+  avatarUrl: string | null;
+  title: string | null;
+  bio: string | null;
+  phone: string | null;
   teams: { id: string; name: string; slug: string }[];
 };
 
-type ProfileOption = { id: string; display_name: string };
+type ProfileOption = {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  title: string | null;
+  bio: string | null;
+  phone: string | null;
+};
 
 function CoachesForm({ teams }: { teams: TeamOption[] }) {
   const sb = getSupabase()!;
@@ -775,20 +786,29 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
 
   async function load() {
     setLoading(true);
-    const [{ data: tc, error: tcErr }, { data: prof }] = await Promise.all([
-      sb
-        .from('team_coaches')
-        .select('team_id, user_id, created_at, teams:teams(id,name,slug)')
-        .order('created_at', { ascending: true }),
-      sb.from('profiles').select('id, display_name').order('display_name'),
-    ]);
-    setLoading(false);
-    if (tcErr) {
-      setStatus(`Error loading coaches: ${tcErr.message}`);
-      return;
+    try {
+      const [{ data: tc, error: tcErr }, { data: prof, error: profErr }] = await Promise.all([
+        sb
+          .from('team_coaches')
+          .select('team_id, user_id, created_at, teams:teams(id,name,slug)')
+          .order('created_at', { ascending: true }),
+        sb
+          .from('profiles')
+          .select('id, display_name, avatar_url, title, bio, phone')
+          .order('display_name'),
+      ]);
+      if (tcErr) {
+        setStatus(`Error loading coaches: ${tcErr.message}`);
+        return;
+      }
+      if (profErr) console.error('[CoachesForm profiles]', profErr);
+      setRows((tc ?? []) as unknown as CoachAssignmentRow[]);
+      setProfiles((prof ?? []) as ProfileOption[]);
+    } catch (e) {
+      console.error('[CoachesForm load] threw', e);
+    } finally {
+      setLoading(false);
     }
-    setRows((tc ?? []) as unknown as CoachAssignmentRow[]);
-    setProfiles((prof ?? []) as ProfileOption[]);
   }
 
   useEffect(() => {
@@ -797,12 +817,20 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
   }, []);
 
   const groups: CoachGroup[] = useMemo(() => {
-    const nameById = new Map(profiles.map((p) => [p.id, p.display_name]));
+    const profById = new Map(profiles.map((p) => [p.id, p]));
     const byUser = new Map<string, CoachGroup>();
     for (const r of rows) {
       if (!r.user_id) continue;
-      const name = nameById.get(r.user_id) ?? '(unknown user)';
-      const g = byUser.get(r.user_id) ?? { userId: r.user_id, displayName: name, teams: [] };
+      const p = profById.get(r.user_id);
+      const g = byUser.get(r.user_id) ?? {
+        userId: r.user_id,
+        displayName: p?.display_name ?? '(unknown user)',
+        avatarUrl: p?.avatar_url ?? null,
+        title: p?.title ?? null,
+        bio: p?.bio ?? null,
+        phone: p?.phone ?? null,
+        teams: [],
+      };
       const teamList = Array.isArray(r.teams) ? r.teams : r.teams ? [r.teams] : [];
       for (const t of teamList) g.teams.push(t);
       byUser.set(r.user_id, g);
@@ -869,8 +897,10 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
 
   return (
     <div className="space-y-6">
+      <InviteCoachForm teams={teams} onInvited={load} />
+
       <form onSubmit={addAssignment} className="card max-w-2xl space-y-4 p-6">
-        <h2 className="text-xl font-semibold">Assign a coach</h2>
+        <h2 className="text-xl font-semibold">Assign an existing user as coach</h2>
         <p className="text-sm text-slate-600">
           Pick any registered user and a team. Both fields are required. The user
           becomes a coach for that team (and can manage the team calendar).
@@ -943,6 +973,7 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
               allTeams={teams}
               onRemove={(teamId) => removeAssignment(g.userId, teamId)}
               onAddTeam={(teamId) => addTeamToCoach(g.userId, teamId)}
+              onSaved={load}
             />
           ))}
         </ul>
@@ -956,13 +987,16 @@ function CoachRow({
   allTeams,
   onRemove,
   onAddTeam,
+  onSaved,
 }: {
   group: CoachGroup;
   allTeams: TeamOption[];
   onRemove: (teamId: string) => void;
   onAddTeam: (teamId: string) => void;
+  onSaved: () => Promise<void> | void;
 }) {
   const [extraTeam, setExtraTeam] = useState('');
+  const [editing, setEditing] = useState(false);
   const availableTeams = useMemo(() => {
     const taken = new Set(group.teams.map((t) => t.id));
     return allTeams.filter((t) => !taken.has(t.id));
@@ -971,11 +1005,40 @@ function CoachRow({
   return (
     <li className="py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="font-semibold text-navy">{group.displayName}</div>
-          <div className="text-xs text-slate-500">{group.userId}</div>
+        <div className="flex items-center gap-3">
+          {group.avatarUrl ? (
+            <img
+              src={group.avatarUrl}
+              alt=""
+              className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+            />
+          ) : (
+            <div
+              className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600"
+              aria-hidden
+            >
+              {group.displayName
+                .split(' ')
+                .map((s) => s[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase()}
+            </div>
+          )}
+          <div>
+            <div className="font-semibold text-navy">{group.displayName}</div>
+            {group.title && <div className="text-xs text-slate-600">{group.title}</div>}
+            <div className="text-[10px] text-slate-400">{group.userId}</div>
+          </div>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+          >
+            {editing ? 'Close' : 'Edit details'}
+          </button>
           <Link
             to={`/coach?as=${group.userId}`}
             className="rounded border border-navy px-3 py-1 text-xs font-semibold text-navy hover:bg-navy hover:text-white"
@@ -984,6 +1047,8 @@ function CoachRow({
           </Link>
         </div>
       </div>
+
+      {editing && <CoachDetailsEditor group={group} onSaved={async () => { await onSaved(); setEditing(false); }} />}
 
       <div className="mt-2 flex flex-wrap gap-2">
         {group.teams.map((t) => (
@@ -1037,6 +1102,250 @@ function CoachRow({
         </div>
       )}
     </li>
+  );
+}
+
+// ===================================================================
+// Invite-a-new-coach form (calls the `invite-coach` Edge Function)
+// ===================================================================
+function InviteCoachForm({
+  teams,
+  onInvited,
+}: {
+  teams: TeamOption[];
+  onInvited: () => Promise<void> | void;
+}) {
+  const sb = getSupabase()!;
+  const [email, setEmail] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [title, setTitle] = useState('');
+  const [teamId, setTeamId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !displayName.trim()) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      const { data, error } = await sb.functions.invoke('invite-coach', {
+        body: {
+          email: email.trim().toLowerCase(),
+          display_name: displayName.trim(),
+          title: title.trim() || undefined,
+          team_id: teamId || undefined,
+          redirect_to: `${window.location.origin}/login`,
+        },
+      });
+      if (error) {
+        setStatus(`Invite failed: ${error.message}`);
+        return;
+      }
+      const body = data as { ok?: boolean; error?: string; invited?: boolean } | null;
+      if (!body?.ok) {
+        setStatus(`Invite failed: ${body?.error ?? 'unknown error'}`);
+        return;
+      }
+      setStatus(
+        body.invited
+          ? `Invite sent to ${email}. They will receive a magic-link email.`
+          : `User ${email} already existed — profile updated and coach role granted.`,
+      );
+      setEmail('');
+      setDisplayName('');
+      setTitle('');
+      setTeamId('');
+      await onInvited();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatus(`Invite failed: ${msg}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="card max-w-2xl space-y-4 p-6">
+      <div>
+        <h2 className="text-xl font-semibold">Invite a new coach</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Sends a magic-link invite to the email you provide. On first sign-in
+          they will land on the site already promoted to coach. Run after
+          deploying the <code>invite-coach</code> Edge Function.
+        </p>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Email">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="input"
+            placeholder="coach@example.com"
+          />
+        </Field>
+        <Field label="Display name">
+          <input
+            type="text"
+            required
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="input"
+            placeholder="Richard Todd"
+          />
+        </Field>
+        <Field label="Title (optional)">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input"
+            placeholder="Head Coach U-15"
+          />
+        </Field>
+        <Field label="Assign to team (optional)">
+          <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
+            <option value="">— None —</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {status && (
+        <p className={`text-sm ${status.startsWith('Invite failed') ? 'text-red-700' : 'text-pitch'}`}>
+          {status}
+        </p>
+      )}
+      <button type="submit" className="btn-primary" disabled={busy}>
+        {busy ? 'Sending invite…' : 'Send invite'}
+      </button>
+    </form>
+  );
+}
+
+// ===================================================================
+// Per-coach details editor (avatar + title + bio + phone)
+// ===================================================================
+function CoachDetailsEditor({
+  group,
+  onSaved,
+}: {
+  group: CoachGroup;
+  onSaved: () => Promise<void> | void;
+}) {
+  const sb = getSupabase()!;
+  const [displayName, setDisplayName] = useState(group.displayName);
+  const [title, setTitle] = useState(group.title ?? '');
+  const [bio, setBio] = useState(group.bio ?? '');
+  const [phone, setPhone] = useState(group.phone ?? '');
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    try {
+      let avatar_url: string | null | undefined = undefined; // undefined = leave unchanged
+      if (file) {
+        const ext = file.name.split('.').pop() ?? 'jpg';
+        const path = `${group.userId}/${crypto.randomUUID()}.${ext}`;
+        const { error: upErr } = await sb.storage
+          .from('avatars')
+          .upload(path, file, { upsert: true, contentType: file.type });
+        if (upErr) {
+          setStatus(`Upload failed: ${upErr.message}`);
+          setBusy(false);
+          return;
+        }
+        avatar_url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+      }
+      const patch: Record<string, unknown> = {
+        display_name: displayName.trim() || group.displayName,
+        title: title.trim() || null,
+        bio: bio.trim() || null,
+        phone: phone.trim() || null,
+        updated_at: new Date().toISOString(),
+      };
+      if (avatar_url !== undefined) patch.avatar_url = avatar_url;
+      const { error } = await sb.from('profiles').update(patch).eq('id', group.userId);
+      if (error) {
+        setStatus(`Save failed: ${error.message}`);
+        return;
+      }
+      setStatus('Saved.');
+      await onSaved();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setStatus(`Save failed: ${msg}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Display name">
+          <input
+            type="text"
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="input"
+          />
+        </Field>
+        <Field label="Title">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input"
+            placeholder="e.g. Head Coach U-15"
+          />
+        </Field>
+        <Field label="Phone">
+          <input
+            type="tel"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            className="input"
+            placeholder="+1 441 …"
+          />
+        </Field>
+        <Field label="Profile photo">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm"
+          />
+        </Field>
+      </div>
+      <Field label="Bio">
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          className="input min-h-[80px]"
+          placeholder="Short bio — kept admin-only on the public site."
+        />
+      </Field>
+      {status && (
+        <p className={`text-sm ${status.startsWith('Save failed') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>
+          {status}
+        </p>
+      )}
+      <div className="flex justify-end">
+        <button type="submit" className="btn-primary" disabled={busy}>
+          {busy ? 'Saving…' : 'Save details'}
+        </button>
+      </div>
+    </form>
   );
 }
 

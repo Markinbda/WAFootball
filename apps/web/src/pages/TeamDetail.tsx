@@ -1,7 +1,54 @@
 import { Link, useParams } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useTeams, useFixtures, useResults } from '@/data/hooks';
 import { PlayerRoster } from '@/components/PlayerRoster';
 import { useTrainingSessions, WEEKDAYS_LONG, fmtTime } from '@/data/phase6';
+import { getSupabase } from '@/lib/supabase';
+
+type TeamCoach = {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  title: string | null;
+};
+
+function useTeamCoaches(teamId: string | undefined) {
+  const [coaches, setCoaches] = useState<TeamCoach[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const sb = getSupabase();
+    if (!sb || !teamId) { setLoading(false); return; }
+    (async () => {
+      try {
+        const { data, error } = await sb
+          .from('team_coaches')
+          .select('user_id, profiles:profiles(display_name, avatar_url, title)')
+          .eq('team_id', teamId);
+        if (error) console.error('[useTeamCoaches]', error);
+        if (!mounted) return;
+        type Row = {
+          user_id: string;
+          profiles: { display_name?: string; avatar_url?: string | null; title?: string | null } | null;
+        };
+        setCoaches(((data ?? []) as unknown as Row[]).map((r) => ({
+          user_id: r.user_id,
+          display_name: r.profiles?.display_name ?? 'Coach',
+          avatar_url: r.profiles?.avatar_url ?? null,
+          title: r.profiles?.title ?? null,
+        })));
+      } catch (e) {
+        console.error('[useTeamCoaches] threw', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => { mounted = false; };
+  }, [teamId]);
+
+  return { coaches, loading };
+}
 
 export function TeamDetail() {
   const { slug } = useParams<{ slug: string }>();
@@ -9,6 +56,7 @@ export function TeamDetail() {
   const { data: fixtures } = useFixtures();
   const { data: results } = useResults();
   const team = teams.find((t) => t.slug === slug);
+  const { coaches } = useTeamCoaches(team?.id);
 
   if (!team) {
     return (
@@ -38,18 +86,50 @@ export function TeamDetail() {
             </div>
             <h1 className="mt-2 text-5xl text-white">{team.name}</h1>
             <p className="mt-3 max-w-2xl text-white/80">{team.blurb}</p>
-            <div className="mt-5 flex items-center gap-3">
-              <img
-                src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(team.coach)}&backgroundType=gradientLinear&backgroundColor=FFC72C,00186C`}
-                alt=""
-                aria-hidden
-                className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
-              />
-              <div className="text-sm">
-                <span className="text-white/70">Coach:</span>{' '}
-                <span className="font-semibold text-gold">{team.coach}</span>
+            {coaches.length > 0 ? (
+              <div className="mt-5 flex flex-wrap items-center gap-4">
+                {coaches.map((c) => (
+                  <div key={c.user_id} className="flex items-center gap-3">
+                    {c.avatar_url ? (
+                      <img
+                        src={c.avatar_url}
+                        alt={c.display_name}
+                        className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="grid h-10 w-10 place-items-center rounded-full border-2 border-gold bg-navy-600 text-xs font-semibold text-white"
+                        aria-hidden
+                      >
+                        {c.display_name
+                          .split(' ')
+                          .map((s) => s[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase()}
+                      </div>
+                    )}
+                    <div className="text-sm">
+                      <div className="font-semibold text-gold">{c.display_name}</div>
+                      {c.title && <div className="text-xs text-white/70">{c.title}</div>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="mt-5 flex items-center gap-3">
+                <img
+                  src={`https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(team.coach)}&backgroundType=gradientLinear&backgroundColor=FFC72C,00186C`}
+                  alt=""
+                  aria-hidden
+                  className="h-10 w-10 rounded-full border-2 border-gold bg-white object-cover"
+                />
+                <div className="text-sm">
+                  <span className="text-white/70">Coach:</span>{' '}
+                  <span className="font-semibold text-gold">{team.coach}</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="h-48 w-full overflow-hidden rounded-xl border border-white/10 bg-navy-600 shadow-lg md:h-56 md:w-80 lg:h-64 lg:w-96">
             {team.photoUrl ? (
