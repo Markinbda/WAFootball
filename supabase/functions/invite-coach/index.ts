@@ -106,10 +106,31 @@ serve(async (req) => {
   let emailSent = false;     // false when we hit a rate-limit but still set the user up
   let emailNote: string | null = null;
 
-  async function findUserIdByEmail(): Promise<string | null> {
+  type AuthUserLite = { id: string; email?: string | null; deleted_at?: string | null };
+  async function findUserByEmail(): Promise<AuthUserLite | null> {
     const { data: list, error: listErr } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
     if (listErr) throw new Error(`Lookup failed: ${listErr.message}`);
-    return list.users.find((u) => u.email?.toLowerCase() === email)?.id ?? null;
+    return (list.users as AuthUserLite[]).find((u) => u.email?.toLowerCase() === email) ?? null;
+  }
+  async function findUserIdByEmail(): Promise<string | null> {
+    return (await findUserByEmail())?.id ?? null;
+  }
+
+  // If a previous "Delete user" (soft delete) left a tombstone with this email,
+  // Supabase will reject a fresh invite with "already registered" even though
+  // the row is hidden from the dashboard's default Users list. Hard-delete
+  // any such tombstone first so the invite can succeed.
+  const existing = await findUserByEmail();
+  if (existing?.deleted_at) {
+    const { error: delErr } = await admin.auth.admin.deleteUser(existing.id, true);
+    if (delErr) {
+      return json({
+        error:
+          `An old (soft-deleted) account with that email is blocking the invite and could not be removed: ${delErr.message}. ` +
+          'In the Supabase dashboard → Authentication → Users, choose "Delete user permanently" for this email and try again.',
+      }, 500);
+    }
+    console.log('[invite-coach] hard-deleted soft-deleted user', existing.id);
   }
 
   const { data: inv, error: invErr } = await admin.auth.admin.inviteUserByEmail(email, {
