@@ -20,22 +20,28 @@ export function useRsvpRollup(fixtureId: string | undefined, enabled: boolean) {
     const sb = getSupabase();
     if (!sb || !fixtureId || !enabled) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await sb
-      .from('rsvps')
-      .select('user_id, status, note, profiles(display_name)')
-      .eq('fixture_id', fixtureId);
-    if (data) {
-      setRows(data.map((r) => {
-        const profile = (r as { profiles?: { display_name?: string } | null }).profiles;
-        return {
-          user_id: r.user_id,
-          status: r.status as RsvpStatus,
-          note: r.note ?? null,
-          display_name: profile?.display_name ?? 'Member',
-        };
-      }));
+    try {
+      const { data, error } = await sb
+        .from('rsvps')
+        .select('user_id, status, note, profiles(display_name)')
+        .eq('fixture_id', fixtureId);
+      if (error) console.error('[useRsvpRollup]', error);
+      if (data) {
+        setRows(data.map((r) => {
+          const profile = (r as { profiles?: { display_name?: string } | null }).profiles;
+          return {
+            user_id: r.user_id,
+            status: r.status as RsvpStatus,
+            note: r.note ?? null,
+            display_name: profile?.display_name ?? 'Member',
+          };
+        }));
+      }
+    } catch (e) {
+      console.error('[useRsvpRollup] threw', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [fixtureId, enabled]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -83,15 +89,17 @@ export function useLeagueTable(competition?: string) {
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
     (async () => {
-      let q = sb
-        .from('fixtures')
-        .select('team_id, score_for, score_against, competition, teams(name, slug)')
-        .eq('status', 'final');
-      if (competition) q = q.eq('competition', competition);
-      const { data } = await q;
-      if (!mounted || !data) { if (mounted) setLoading(false); return; }
+      try {
+        let q = sb
+          .from('fixtures')
+          .select('team_id, score_for, score_against, competition, teams(name, slug)')
+          .eq('status', 'final');
+        if (competition) q = q.eq('competition', competition);
+        const { data, error } = await q;
+        if (error) console.error('[useLeagueTable]', error);
+        if (!mounted || !data) { return; }
 
-      const acc = new Map<string, LeagueRow>();
+        const acc = new Map<string, LeagueRow>();
       for (const raw of data) {
         const r = raw as unknown as {
           team_id: string; score_for: number | null; score_against: number | null;
@@ -114,10 +122,15 @@ export function useLeagueTable(competition?: string) {
         row.goal_diff = row.goals_for - row.goals_against;
         acc.set(r.team_id, row);
       }
-      const list = [...acc.values()].sort(
-        (a, b) => b.points - a.points || b.goal_diff - a.goal_diff || b.goals_for - a.goals_for,
-      );
-      if (mounted) { setRows(list); setLoading(false); }
+        const list = [...acc.values()].sort(
+          (a, b) => b.points - a.points || b.goal_diff - a.goal_diff || b.goals_for - a.goals_for,
+        );
+        if (mounted) setRows(list);
+      } catch (e) {
+        console.error('[useLeagueTable] threw', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
     })();
     return () => { mounted = false; };
   }, [competition]);
@@ -145,23 +158,30 @@ export function usePlayerProfile(playerId: string | undefined) {
     const sb = getSupabase();
     if (!sb || !playerId) { setLoading(false); return; }
     (async () => {
-      const [{ data: p }, { data: ev }] = await Promise.all([
-        sb.from('players')
-          .select('*, teams(name, slug)')
-          .eq('id', playerId)
-          .single(),
-        sb.from('match_events')
-          .select('*')
-          .eq('player_id', playerId)
-          .order('created_at', { ascending: false }),
-      ]);
-      if (!mounted) return;
-      if (p) {
-        const row = p as unknown as Player & { teams?: { name?: string; slug?: string } | null };
-        setPlayer({ ...row, team_name: row.teams?.name, team_slug: row.teams?.slug });
+      try {
+        const [{ data: p, error: pErr }, { data: ev, error: evErr }] = await Promise.all([
+          sb.from('players')
+            .select('*, teams(name, slug)')
+            .eq('id', playerId)
+            .single(),
+          sb.from('match_events')
+            .select('*')
+            .eq('player_id', playerId)
+            .order('created_at', { ascending: false }),
+        ]);
+        if (pErr) console.error('[usePlayerProfile player]', pErr);
+        if (evErr) console.error('[usePlayerProfile events]', evErr);
+        if (!mounted) return;
+        if (p) {
+          const row = p as unknown as Player & { teams?: { name?: string; slug?: string } | null };
+          setPlayer({ ...row, team_name: row.teams?.name, team_slug: row.teams?.slug });
+        }
+        if (ev) setEvents(ev as MatchEvent[]);
+      } catch (e) {
+        console.error('[usePlayerProfile] threw', e);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (ev) setEvents(ev as MatchEvent[]);
-      setLoading(false);
     })();
     return () => { mounted = false; };
   }, [playerId]);
@@ -258,20 +278,27 @@ export function usePlayerGuardians(playerId: string | undefined) {
     const sb = getSupabase();
     if (!sb || !playerId) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await sb
-      .from('player_guardians')
-      .select('id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone, notes')
-      .eq('player_id', playerId)
-      .order('created_at', { ascending: true });
-    if (error) {
-      // RLS will silently return empty for non-authorized; treat any error as no-access
+    try {
+      const { data, error } = await sb
+        .from('player_guardians')
+        .select('id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone, notes')
+        .eq('player_id', playerId)
+        .order('created_at', { ascending: true });
+      if (error) {
+        // RLS will silently return empty for non-authorized; treat any error as no-access
+        setCanRead(false);
+        setGuardians([]);
+      } else {
+        setCanRead(true);
+        setGuardians((data ?? []) as PlayerGuardian[]);
+      }
+    } catch (e) {
+      console.error('[usePlayerGuardians] threw', e);
       setCanRead(false);
       setGuardians([]);
-    } else {
-      setCanRead(true);
-      setGuardians((data ?? []) as PlayerGuardian[]);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [playerId]);
 
   useEffect(() => { void reload(); }, [reload]);

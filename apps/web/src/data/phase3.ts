@@ -50,13 +50,20 @@ export function usePlayers(teamId: string | undefined) {
     const sb = getSupabase();
     if (!sb || !teamId) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await sb
-      .from('players')
-      .select('*')
-      .eq('team_id', teamId)
-      .order('squad_number', { ascending: true, nullsFirst: false });
-    if (data) setPlayers(data as Player[]);
-    setLoading(false);
+    try {
+      const { data, error } = await sb
+        .from('players')
+        .select('*')
+        .eq('team_id', teamId)
+        .order('squad_number', { ascending: true, nullsFirst: false });
+      if (error) console.error('[usePlayers]', error);
+      setPlayers((data ?? []) as Player[]);
+    } catch (e) {
+      console.error('[usePlayers] threw', e);
+      setPlayers([]);
+    } finally {
+      setLoading(false);
+    }
   }, [teamId]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -73,32 +80,38 @@ export function useFixture(fixtureId: string | undefined) {
     const sb = getSupabase();
     if (!sb || !fixtureId) { setLoading(false); return; }
     (async () => {
-      const { data } = await sb
-        .from('fixtures')
-        .select('id, team_id, opponent, kickoff_at, venue, competition, status, score_for, score_against, teams(name)')
-        .eq('id', fixtureId)
-        .single();
-      if (mounted && data) {
-        const row = data as unknown as {
-          id: string; team_id: string; opponent: string; kickoff_at: string;
-          venue: 'Home'|'Away'; competition: string; status: FixtureFull['status'];
-          score_for: number|null; score_against: number|null;
-          teams?: { name?: string } | null;
-        };
-        setFixture({
-          id: row.id,
-          team_id: row.team_id,
-          team_name: row.teams?.name ?? '—',
-          opponent: row.opponent,
-          kickoff_at: row.kickoff_at,
-          venue: row.venue,
-          competition: row.competition,
-          status: row.status,
-          score_for: row.score_for,
-          score_against: row.score_against,
-        });
+      try {
+        const { data, error } = await sb
+          .from('fixtures')
+          .select('id, team_id, opponent, kickoff_at, venue, competition, status, score_for, score_against, teams(name)')
+          .eq('id', fixtureId)
+          .single();
+        if (error) console.error('[useFixture]', error);
+        if (mounted && data) {
+          const row = data as unknown as {
+            id: string; team_id: string; opponent: string; kickoff_at: string;
+            venue: 'Home'|'Away'; competition: string; status: FixtureFull['status'];
+            score_for: number|null; score_against: number|null;
+            teams?: { name?: string } | null;
+          };
+          setFixture({
+            id: row.id,
+            team_id: row.team_id,
+            team_name: row.teams?.name ?? '—',
+            opponent: row.opponent,
+            kickoff_at: row.kickoff_at,
+            venue: row.venue,
+            competition: row.competition,
+            status: row.status,
+            score_for: row.score_for,
+            score_against: row.score_against,
+          });
+        }
+      } catch (e) {
+        console.error('[useFixture] threw', e);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      if (mounted) setLoading(false);
     })();
     return () => { mounted = false; };
   }, [fixtureId]);
@@ -114,14 +127,20 @@ export function useMyRsvp(fixtureId: string | undefined, userId: string | undefi
     const sb = getSupabase();
     if (!sb || !fixtureId || !userId) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await sb
-      .from('rsvps')
-      .select('user_id, status, note')
-      .eq('fixture_id', fixtureId)
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data) setRsvp(data as Rsvp);
-    setLoading(false);
+    try {
+      const { data, error } = await sb
+        .from('rsvps')
+        .select('user_id, status, note')
+        .eq('fixture_id', fixtureId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (error) console.error('[useMyRsvp]', error);
+      if (data) setRsvp(data as Rsvp);
+    } catch (e) {
+      console.error('[useMyRsvp] threw', e);
+    } finally {
+      setLoading(false);
+    }
   }, [fixtureId, userId]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -147,13 +166,19 @@ export function useMatchEvents(fixtureId: string | undefined) {
     const sb = getSupabase();
     if (!sb || !fixtureId) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await sb
-      .from('match_events')
-      .select('*')
-      .eq('fixture_id', fixtureId)
-      .order('created_at', { ascending: true });
-    if (data) setEvents(data as MatchEvent[]);
-    setLoading(false);
+    try {
+      const { data, error } = await sb
+        .from('match_events')
+        .select('*')
+        .eq('fixture_id', fixtureId)
+        .order('created_at', { ascending: true });
+      if (error) console.error('[useMatchEvents]', error);
+      setEvents((data ?? []) as MatchEvent[]);
+    } catch (e) {
+      console.error('[useMatchEvents] threw', e);
+    } finally {
+      setLoading(false);
+    }
   }, [fixtureId]);
 
   useEffect(() => { void reload(); }, [reload]);

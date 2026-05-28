@@ -27,13 +27,20 @@ export function useGallery(limit = 60) {
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
     (async () => {
-      const { data } = await sb
-        .from('gallery_photos')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      setPhotos((data ?? []) as GalleryPhoto[]);
-      setLoading(false);
+      try {
+        const { data, error } = await sb
+          .from('gallery_photos')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        if (error) console.error('[useGallery]', error);
+        setPhotos((data ?? []) as GalleryPhoto[]);
+      } catch (e) {
+        console.error('[useGallery] threw', e);
+        setPhotos([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [limit]);
 
@@ -48,14 +55,21 @@ export function useSponsors() {
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
     (async () => {
-      const { data } = await sb
-        .from('sponsors')
-        .select('*')
-        .eq('active', true)
-        .order('sort_order')
-        .order('name');
-      setSponsors((data ?? []) as Sponsor[]);
-      setLoading(false);
+      try {
+        const { data, error } = await sb
+          .from('sponsors')
+          .select('*')
+          .eq('active', true)
+          .order('sort_order')
+          .order('name');
+        if (error) console.error('[useSponsors]', error);
+        setSponsors((data ?? []) as Sponsor[]);
+      } catch (e) {
+        console.error('[useSponsors] threw', e);
+        setSponsors([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 

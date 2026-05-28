@@ -37,11 +37,18 @@ export function useTrainingSessions(teamId?: string) {
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
     setLoading(true);
-    let q = sb.from('training_sessions').select('*').eq('active', true);
-    if (teamId) q = q.eq('team_id', teamId);
-    const { data } = await q.order('weekday').order('starts_at');
-    setSessions((data ?? []) as TrainingSession[]);
-    setLoading(false);
+    try {
+      let q = sb.from('training_sessions').select('*').eq('active', true);
+      if (teamId) q = q.eq('team_id', teamId);
+      const { data, error } = await q.order('weekday').order('starts_at');
+      if (error) console.error('[useTrainingSessions]', error);
+      setSessions((data ?? []) as TrainingSession[]);
+    } catch (e) {
+      console.error('[useTrainingSessions] threw', e);
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
   }, [teamId]);
 
   useEffect(() => { void reload(); }, [reload]);
@@ -74,13 +81,20 @@ export function useLeaderboards() {
     const sb = getSupabase();
     if (!sb) { setLoading(false); return; }
     (async () => {
-      const { data } = await sb
-        .from('match_events')
-        .select('player_id, type, players(full_name, teams(name, slug))')
-        .in('type', ['goal_for', 'yellow', 'red'])
-        .not('player_id', 'is', null);
-      setRows((data ?? []) as unknown as RawEvent[]);
-      setLoading(false);
+      try {
+        const { data, error } = await sb
+          .from('match_events')
+          .select('player_id, type, players(full_name, teams(name, slug))')
+          .in('type', ['goal_for', 'yellow', 'red'])
+          .not('player_id', 'is', null);
+        if (error) console.error('[useLeaderboards]', error);
+        setRows((data ?? []) as unknown as RawEvent[]);
+      } catch (e) {
+        console.error('[useLeaderboards] threw', e);
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
