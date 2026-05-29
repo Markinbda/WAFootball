@@ -33,38 +33,43 @@ export function LiveMatch() {
       setLoading(true);
       try {
         // Resolve team
-        const { data: team } = await sb
+        const { data: team, error: teamErr } = await sb
           .from('teams')
           .select('id, name, slug')
           .eq('slug', teamSlug)
           .maybeSingle();
+        if (teamErr) console.error('[LiveMatch] team lookup', teamErr);
         if (!team) { setFixture(null); setLoading(false); return; }
 
-        // Prefer status=live; else next upcoming; else most recent past.
+        // Fetch all fixtures for the team, then pick the most relevant on the
+        // client (prefer live → next upcoming → most recent past). Doing this
+        // in one query avoids fragile chained .maybeSingle() calls.
         const baseSel = 'id, team_id, opponent, kickoff_at, venue, competition, status, score_for, score_against';
-        const { data: liveRow } = await sb
-          .from('fixtures').select(baseSel)
-          .eq('team_id', team.id).eq('status', 'live')
-          .order('kickoff_at', { ascending: false }).limit(1).maybeSingle();
-        let f = liveRow;
-        if (!f) {
-          const { data: next } = await sb
-            .from('fixtures').select(baseSel)
-            .eq('team_id', team.id).gte('kickoff_at', new Date().toISOString())
-            .order('kickoff_at', { ascending: true }).limit(1).maybeSingle();
-          f = next;
-        }
-        if (!f) {
-          const { data: last } = await sb
-            .from('fixtures').select(baseSel)
-            .eq('team_id', team.id).lt('kickoff_at', new Date().toISOString())
-            .order('kickoff_at', { ascending: false }).limit(1).maybeSingle();
-          f = last;
-        }
+        const { data: rows, error: fxErr } = await sb
+          .from('fixtures').select(baseSel).eq('team_id', team.id);
+        if (fxErr) console.error('[LiveMatch] fixtures', fxErr);
+
+        const all = (rows ?? []) as Array<Omit<LiveFixture, 'team_name' | 'team_slug'>>;
+        const now = Date.now();
+        const sorted = [...all].sort((a, b) => {
+          // Live wins
+          if (a.status === 'live' && b.status !== 'live') return -1;
+          if (b.status === 'live' && a.status !== 'live') return 1;
+          // Then nearest in the future
+          const aFuture = new Date(a.kickoff_at).getTime() >= now;
+          const bFuture = new Date(b.kickoff_at).getTime() >= now;
+          if (aFuture && !bFuture) return -1;
+          if (bFuture && !aFuture) return 1;
+          // Both future: earliest first; both past: latest first
+          return aFuture
+            ? new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()
+            : new Date(b.kickoff_at).getTime() - new Date(a.kickoff_at).getTime();
+        });
+        const f = sorted[0];
         if (!f) { setFixture(null); setLoading(false); return; }
 
         setFixture({
-          ...(f as Omit<LiveFixture, 'team_name' | 'team_slug'>),
+          ...f,
           team_name: team.name,
           team_slug: team.slug,
         });
