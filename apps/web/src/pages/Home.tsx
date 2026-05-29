@@ -121,23 +121,50 @@ export function Home() {
             <Link to="/news" className="text-sm font-semibold">All news →</Link>
           </div>
           <div className="grid gap-6 md:grid-cols-3">
-            {news.slice(0, 3).map((item) => (
-              <article key={item.id} className="card overflow-hidden">
-                <div className="h-40 bg-gradient-to-br from-navy via-navy-600 to-navy-500" />
-                <div className="p-5">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-gold">
-                    {item.tag}
+            {news.slice(0, 3).map((item) => {
+              // Pick a tag-driven hero badge so the cards aren't empty navy slabs.
+              const tag = (item.tag ?? '').toUpperCase();
+              let badgeLabel = '';
+              let badgeIcon = '';
+              if (tag.includes('REGIST')) {
+                badgeLabel = 'OPEN NOW';
+                badgeIcon = '📝';
+              } else if (tag.includes('MATCH') || tag.includes('RESULT')) {
+                badgeLabel = 'GOAL!';
+                badgeIcon = '⚽';
+              } else if (tag.includes('CLUB') || tag.includes('LAUNCH') || tag.includes('NEW')) {
+                badgeLabel = 'NEW';
+                badgeIcon = '✨';
+              }
+              return (
+                <article key={item.id} className="card overflow-hidden">
+                  <div className="relative h-40 bg-gradient-to-br from-navy via-navy-600 to-navy-500">
+                    {/* subtle radial light to add depth */}
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.18),transparent_60%)]" />
+                    {badgeLabel && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <div className="text-5xl drop-shadow-md" aria-hidden="true">{badgeIcon}</div>
+                        <div className="mt-2 inline-block rounded-full bg-gold px-4 py-1 text-xs font-bold uppercase tracking-widest text-navy shadow-md">
+                          {badgeLabel}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <h3 className="mt-2 text-xl">{item.title}</h3>
-                  <p className="mt-2 text-sm text-slate-600">{item.excerpt}</p>
-                  <div className="mt-4 text-xs text-slate-500">
-                    {new Date(item.date).toLocaleDateString('en-GB', {
-                      day: 'numeric', month: 'short', year: 'numeric',
-                    })}{' '}· {item.author}
+                  <div className="p-5">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-gold">
+                      {item.tag}
+                    </div>
+                    <h3 className="mt-2 text-xl">{item.title}</h3>
+                    <p className="mt-2 text-sm text-slate-600">{item.excerpt}</p>
+                    <div className="mt-4 text-xs text-slate-500">
+                      {new Date(item.date).toLocaleDateString('en-GB', {
+                        day: 'numeric', month: 'short', year: 'numeric',
+                      })}{' '}· {item.author}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         </div>
       </section>
