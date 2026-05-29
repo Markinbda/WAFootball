@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePlayers } from '@/data/phase3';
-import { TICKER_TAGS, type TickerTag, type TickerEntry } from '@/data/hooks';
+import { TICKER_TAGS, type TickerTag, type TickerEntry, useFixtures, useResults } from '@/data/hooks';
 
 type TeamOption = { id: string; name: string };
 type AdminTab = 'news' | 'ticker' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
@@ -146,6 +146,9 @@ function TickerForm() {
   const [tag, setTag] = useState<TickerTag>('NEWS');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+
+  const { data: fixtures } = useFixtures();
+  const { data: results } = useResults();
 
   async function refresh() {
     setLoading(true);
@@ -295,6 +298,48 @@ function TickerForm() {
           {busy ? 'Adding…' : 'Add to ticker'}
         </button>
       </form>
+
+      <div className="card p-6">
+        <h3 className="font-display text-navy">Auto entries currently on ticker</h3>
+        <p className="mt-1 text-sm text-slate-600">
+          These come from your published fixtures and results and appear automatically — managed
+          from the <span className="font-semibold">Fixtures &amp; Results</span> tab, not here.
+        </p>
+        <ul className="mt-4 divide-y divide-slate-200">
+          {results.slice(0, 8).map((r) => {
+            const verdict =
+              r.scoreFor > r.scoreAgainst ? 'WIN' : r.scoreFor < r.scoreAgainst ? 'LOSS' : 'DRAW';
+            const date = new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase();
+            return (
+              <li key={`r-${r.id}`} className="flex items-center gap-3 py-2">
+                <span className="rounded bg-pitch px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  RESULT
+                </span>
+                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">
+                  {date} · {r.venue.toUpperCase()} {verdict} {r.scoreFor}–{r.scoreAgainst} · {r.team} v {r.opponent}
+                </div>
+              </li>
+            );
+          })}
+          {fixtures.slice(0, 8).map((f) => {
+            const date = new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase();
+            const time = new Date(f.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+            return (
+              <li key={`f-${f.id}`} className="flex items-center gap-3 py-2">
+                <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  FIXTURE
+                </span>
+                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">
+                  {date} · {time} · {f.venue.toUpperCase()} · {f.team} v {f.opponent}
+                </div>
+              </li>
+            );
+          })}
+          {results.length === 0 && fixtures.length === 0 && (
+            <li className="py-2 text-sm text-slate-500">No fixtures or results yet.</li>
+          )}
+        </ul>
+      </div>
     </div>
   );
 }
