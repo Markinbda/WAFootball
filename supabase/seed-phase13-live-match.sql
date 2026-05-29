@@ -1,18 +1,17 @@
--- Warwick FA — Phase 13: live-match demo seed
+-- Warwick FA — Phase 13: live-match demo seed (ASCII-safe)
 --
 -- Powers the homepage "Live Results Now" tile and the /live/mens-first page.
--- Marks the Men's First upcoming home fixture as live and inserts ~5
--- football-related events against the first few active players on the squad.
+-- Marks the Mens First next fixture as live and inserts ~5 demo events
+-- against the first few active players on the squad.
 -- Safe to re-run: dedupes events by (fixture, player, minute, type).
 
+-- Step 1: mark the chosen fixture as live
 with mf as (
   select id from public.teams where slug = 'mens-first' limit 1
 ),
 fx as (
-  -- Pick the next upcoming Men's First home fixture; fall back to the most
-  -- recent one if all are in the past.
-  select id, team_id from (
-    select f.id, f.team_id, f.kickoff_at,
+  select id from (
+    select f.id, f.kickoff_at,
            case when f.kickoff_at >= now() then 0 else 1 end as past
     from public.fixtures f
     join mf on mf.id = f.team_id
@@ -24,7 +23,7 @@ update public.fixtures
    set status = 'live'
  where id in (select id from fx);
 
--- Insert play-by-play events
+-- Step 2: insert play-by-play events
 with mf as (
   select id from public.teams where slug = 'mens-first' limit 1
 ),
@@ -48,14 +47,14 @@ ranked_players as (
 ),
 plan(rn, kind, minute, note) as (
   values
-    (null::int,'kickoff'::match_event_type,     0,   'Kick-off — Warwick get us underway'),
-    (1,       'goal_for'::match_event_type,    14,  'Sweeping move down the right finished first time'),
-    (2,       'yellow'::match_event_type,      27,  'Late challenge in midfield'),
-    (3,       'goal_for'::match_event_type,    41,  'Header from the corner — what a leap!'),
-    (null::int,'halftime'::match_event_type,   45,  'Half-time whistle. Warwick lead.'),
-    (4,       'goal_against'::match_event_type,58,  'Visitors pull one back from the spot'),
-    (5,       'red'::match_event_type,         72,  'Second yellow — Warwick down to ten'),
-    (1,       'goal_for'::match_event_type,    83,  'Counter-attack finish into the bottom corner')
+    (null::int, 'kickoff'::match_event_type,      0,  'Kick-off. Warwick get us underway.'),
+    (1,         'goal_for'::match_event_type,     14, 'Sweeping move down the right finished first time.'),
+    (2,         'yellow'::match_event_type,       27, 'Late challenge in midfield.'),
+    (3,         'goal_for'::match_event_type,     41, 'Header from the corner. Brilliant leap.'),
+    (null::int, 'halftime'::match_event_type,     45, 'Half-time whistle. Warwick lead 2-0.'),
+    (4,         'goal_against'::match_event_type, 58, 'Visitors pull one back from the spot.'),
+    (5,         'red'::match_event_type,          72, 'Second yellow. Warwick down to ten men.'),
+    (1,         'goal_for'::match_event_type,     83, 'Counter-attack finish into the bottom corner.')
 )
 insert into public.match_events (fixture_id, minute, type, player_id, note)
 select
