@@ -43,25 +43,32 @@ export function NewsTicker() {
     label: t.label,
   }));
 
-  const items: Item[] = [
-    ...customItems,
-    ...results.slice(0, 8).map<Item>((r) => {
-      const verdict =
-        r.scoreFor > r.scoreAgainst ? 'WIN' : r.scoreFor < r.scoreAgainst ? 'LOSS' : 'DRAW';
-      return {
-        key: `r-${r.id}`,
-        href: '/results',
-        tag: 'RESULT',
-        label: `${fmtDate(r.date)} · ${r.venue.toUpperCase()} ${verdict} ${r.scoreFor}–${r.scoreAgainst} · ${r.team} v ${r.opponent}`,
-      };
-    }),
-    ...fixtures.slice(0, 8).map<Item>((f) => ({
-      key: `f-${f.id}`,
-      href: '/fixtures',
-      tag: 'FIXTURE',
-      label: `${fmtDate(f.date)} · ${fmtTime(f.date)} · ${f.venue.toUpperCase()} · ${f.team} v ${f.opponent}`,
-    })),
-  ];
+  const resultItems: Item[] = results.slice(0, 8).map<Item>((r) => {
+    const verdict =
+      r.scoreFor > r.scoreAgainst ? 'WIN' : r.scoreFor < r.scoreAgainst ? 'LOSS' : 'DRAW';
+    return {
+      key: `r-${r.id}`,
+      href: '/results',
+      tag: 'RESULT',
+      label: `${fmtDate(r.date)} · ${r.venue.toUpperCase()} ${verdict} ${r.scoreFor}–${r.scoreAgainst} · ${r.team} v ${r.opponent}`,
+    };
+  });
+  const fixtureItems: Item[] = fixtures.slice(0, 8).map<Item>((f) => ({
+    key: `f-${f.id}`,
+    href: '/fixtures',
+    tag: 'FIXTURE',
+    label: `${fmtDate(f.date)} · ${fmtTime(f.date)} · ${f.venue.toUpperCase()} · ${f.team} v ${f.opponent}`,
+  }));
+
+  // Interleave results and fixtures so the ticker alternates between the two
+  // rather than showing one solid block of each.
+  const interleaved: Item[] = [];
+  for (let i = 0; i < Math.max(resultItems.length, fixtureItems.length); i++) {
+    if (i < resultItems.length) interleaved.push(resultItems[i]);
+    if (i < fixtureItems.length) interleaved.push(fixtureItems[i]);
+  }
+
+  const items: Item[] = [...customItems, ...interleaved];
 
   if (items.length === 0) return null;
 

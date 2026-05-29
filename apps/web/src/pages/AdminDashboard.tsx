@@ -306,38 +306,69 @@ function TickerForm() {
           from the <span className="font-semibold">Fixtures &amp; Results</span> tab, not here.
         </p>
         <ul className="mt-4 divide-y divide-slate-200">
-          {results.slice(0, 8).map((r) => {
-            const verdict =
-              r.scoreFor > r.scoreAgainst ? 'WIN' : r.scoreFor < r.scoreAgainst ? 'LOSS' : 'DRAW';
-            const date = new Date(r.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase();
-            return (
-              <li key={`r-${r.id}`} className="flex items-center gap-3 py-2">
-                <span className="rounded bg-pitch px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                  RESULT
+          {(() => {
+            type AutoItem = {
+              key: string;
+              kind: 'RESULT' | 'FIXTURE';
+              sortDate: number;
+              label: string;
+            };
+            // Interleave results and fixtures (each list newest-first) so the
+            // ticker doesn't show one big block of fixtures followed by one
+            // big block of results.
+            const r = [...results]
+              .slice(0, 8)
+              .map((x): AutoItem => {
+                const verdict =
+                  x.scoreFor > x.scoreAgainst ? 'WIN' : x.scoreFor < x.scoreAgainst ? 'LOSS' : 'DRAW';
+                const date = new Date(x.date)
+                  .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                  .toUpperCase();
+                return {
+                  key: `r-${x.id}`,
+                  kind: 'RESULT',
+                  sortDate: new Date(x.date).getTime(),
+                  label: `${date} · ${x.venue.toUpperCase()} ${verdict} ${x.scoreFor}–${x.scoreAgainst} · ${x.team} v ${x.opponent}`,
+                };
+              });
+            const f = [...fixtures]
+              .slice(0, 8)
+              .map((x): AutoItem => {
+                const date = new Date(x.date)
+                  .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                  .toUpperCase();
+                const time = new Date(x.date).toLocaleTimeString('en-GB', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                return {
+                  key: `f-${x.id}`,
+                  kind: 'FIXTURE',
+                  sortDate: new Date(x.date).getTime(),
+                  label: `${date} · ${time} · ${x.venue.toUpperCase()} · ${x.team} v ${x.opponent}`,
+                };
+              });
+            const items: AutoItem[] = [];
+            for (let i = 0; i < Math.max(r.length, f.length); i++) {
+              if (i < r.length) items.push(r[i]);
+              if (i < f.length) items.push(f[i]);
+            }
+            if (items.length === 0) {
+              return <li className="py-2 text-sm text-slate-500">No fixtures or results yet.</li>;
+            }
+            return items.map((it) => (
+              <li key={it.key} className="flex items-center gap-3 py-2">
+                <span
+                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ${
+                    it.kind === 'RESULT' ? 'bg-pitch' : 'bg-slate-700'
+                  }`}
+                >
+                  {it.kind}
                 </span>
-                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">
-                  {date} · {r.venue.toUpperCase()} {verdict} {r.scoreFor}–{r.scoreAgainst} · {r.team} v {r.opponent}
-                </div>
+                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">{it.label}</div>
               </li>
-            );
-          })}
-          {fixtures.slice(0, 8).map((f) => {
-            const date = new Date(f.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase();
-            const time = new Date(f.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-            return (
-              <li key={`f-${f.id}`} className="flex items-center gap-3 py-2">
-                <span className="rounded bg-slate-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                  FIXTURE
-                </span>
-                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">
-                  {date} · {time} · {f.venue.toUpperCase()} · {f.team} v {f.opponent}
-                </div>
-              </li>
-            );
-          })}
-          {results.length === 0 && fixtures.length === 0 && (
-            <li className="py-2 text-sm text-slate-500">No fixtures or results yet.</li>
-          )}
+            ));
+          })()}
         </ul>
       </div>
     </div>
