@@ -17,6 +17,7 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
 import { Gallery } from './pages/Gallery';
+import { Sponsors } from './pages/Sponsors';
 import { ContentPage } from './pages/ContentPage';
 import { History } from './pages/History';
 import { Register } from './pages/Register';
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="stats" element={<Stats />} />
         <Route path="training" element={<Training />} />
         <Route path="gallery" element={<Gallery />} />
+        <Route path="sponsors" element={<Sponsors />} />
         <Route path="page/history" element={<History />} />
         <Route path="page/:slug" element={<ContentPage />} />
         <Route path="register" element={<Register />} />

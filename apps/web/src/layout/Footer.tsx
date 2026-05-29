@@ -19,23 +19,19 @@ export function Footer() {
         <div>
           <h4 className="text-sm font-semibold text-gold">Club</h4>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
-            <li>About</li>
-            <li>Teams</li>
-            <li>Coaches</li>
-            <li>Sponsors</li>
+            <li><Link to="/page/history" className="hover:text-gold">About</Link></li>
+            <li><Link to="/teams" className="hover:text-gold">Teams</Link></li>
+            <li><Link to="/teams" className="hover:text-gold">Coaches</Link></li>
+            <li><Link to="/sponsors" className="hover:text-gold">Sponsors</Link></li>
           </ul>
         </div>
         <div>
           <h4 className="text-sm font-semibold text-gold">Get Involved</h4>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
-            <li>
-              <Link to="/register" className="text-white/80 hover:text-gold">
-                Registration
-              </Link>
-            </li>
-            <li>Trials</li>
-            <li>Volunteer</li>
-            <li>Contact</li>
+            <li><Link to="/register" className="hover:text-gold">Registration</Link></li>
+            <li><Link to="/register" className="hover:text-gold">Trials</Link></li>
+            <li><Link to="/contact" className="hover:text-gold">Volunteer</Link></li>
+            <li><Link to="/contact" className="hover:text-gold">Contact</Link></li>
           </ul>
         </div>
         <div>
