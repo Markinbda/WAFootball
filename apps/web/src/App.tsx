@@ -18,6 +18,7 @@ import { Stats } from './pages/Stats';
 import { Training } from './pages/Training';
 import { Gallery } from './pages/Gallery';
 import { Sponsors } from './pages/Sponsors';
+import { LiveMatch } from './pages/LiveMatch';
 import { ContentPage } from './pages/ContentPage';
 import { History } from './pages/History';
 import { Register } from './pages/Register';
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="training" element={<Training />} />
         <Route path="gallery" element={<Gallery />} />
         <Route path="sponsors" element={<Sponsors />} />
+        <Route path="live/:teamSlug" element={<LiveMatch />} />
         <Route path="page/history" element={<History />} />
         <Route path="page/:slug" element={<ContentPage />} />
         <Route path="register" element={<Register />} />

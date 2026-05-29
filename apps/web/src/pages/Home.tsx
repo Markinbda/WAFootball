@@ -102,6 +102,30 @@ export function Home() {
         </div>
       </section>
 
+      {/* LIVE RESULTS NOW */}
+      <section className="container-page pb-12">
+        <div className="card overflow-hidden border-l-4 border-red-500 p-0">
+          <div className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-red-600">
+                <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+                Live Results Now
+              </div>
+              <h3 className="mt-2 font-display text-2xl text-navy">Men&rsquo;s First &mdash; play-by-play</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                Follow goals, cards, and key moments from the Men&rsquo;s First match in real time.
+              </p>
+            </div>
+            <Link
+              to="/live/mens-first"
+              className="inline-flex items-center justify-center rounded bg-red-600 px-5 py-2 text-sm font-semibold text-white hover:bg-red-700"
+            >
+              Live results &rarr;
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* STANDINGS */}
       <section className="bg-slate-50 py-16">
         <div className="container-page">
