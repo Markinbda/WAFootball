@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
-import { useFixtures, useResults } from '@/data/hooks';
+import { useFixtures, useResults, useTickerEntries } from '@/data/hooks';
 
-type Item = { key: string; href: string; label: string; tag: 'RESULT' | 'FIXTURE' };
+type Tag = 'RESULT' | 'FIXTURE' | 'NEWS' | 'NOTICE' | 'EVENT';
+type Item = { key: string; href: string; label: string; tag: Tag };
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-GB', {
@@ -17,11 +18,33 @@ function fmtTime(iso: string) {
   });
 }
 
+function tagBadgeClass(tag: Tag): string {
+  switch (tag) {
+    case 'RESULT':  return 'bg-pitch text-white';
+    case 'FIXTURE': return 'bg-white/15 text-white';
+    case 'NEWS':    return 'bg-gold text-navy';
+    case 'NOTICE':  return 'bg-red-500 text-white';
+    case 'EVENT':   return 'bg-sky-500 text-white';
+    default:        return 'bg-white/15 text-white';
+  }
+}
+
 export function NewsTicker() {
   const { data: fixtures } = useFixtures();
   const { data: results } = useResults();
+  const { data: tickerEntries } = useTickerEntries();
+
+  const customItems: Item[] = tickerEntries.slice(0, 6).map((t) => ({
+    key: `t-${t.id}`,
+    href: t.href || '#',
+    tag: (['RESULT', 'FIXTURE', 'NEWS', 'NOTICE', 'EVENT'] as const).includes(t.tag as Tag)
+      ? (t.tag as Tag)
+      : 'NEWS',
+    label: t.label,
+  }));
 
   const items: Item[] = [
+    ...customItems,
     ...results.slice(0, 8).map<Item>((r) => {
       const verdict =
         r.scoreFor > r.scoreAgainst ? 'WIN' : r.scoreFor < r.scoreAgainst ? 'LOSS' : 'DRAW';
@@ -64,9 +87,7 @@ export function NewsTicker() {
                 className="inline-flex items-center gap-3 text-sm !text-white hover:!text-gold"
               >
                 <span
-                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                    it.tag === 'RESULT' ? 'bg-pitch text-white' : 'bg-white/15 text-white'
-                  }`}
+                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagBadgeClass(it.tag)}`}
                 >
                   {it.tag}
                 </span>

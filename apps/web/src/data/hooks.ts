@@ -122,3 +122,34 @@ export function useNews() {
     })) ?? null;
   });
 }
+
+export type TickerEntry = {
+  id: string;
+  label: string;
+  href: string | null;
+  tag: string;
+  sort: number;
+};
+
+export const TICKER_TAGS = ['NEWS', 'RESULT', 'FIXTURE', 'NOTICE', 'EVENT'] as const;
+export type TickerTag = typeof TICKER_TAGS[number];
+
+export function useTickerEntries() {
+  return useResource<TickerEntry[]>([], async (sb) => {
+    const { data, error } = await sb
+      .from('ticker_entries')
+      .select('id, label, href, tag, sort')
+      .eq('active', true)
+      .order('sort', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(6);
+    if (error) throw error;
+    return (data ?? []).map((r) => ({
+      id: r.id as string,
+      label: r.label as string,
+      href: (r.href as string | null) ?? null,
+      tag: (r.tag as string) ?? 'NEWS',
+      sort: (r.sort as number) ?? 0,
+    }));
+  });
+}

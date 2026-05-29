@@ -3,11 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePlayers } from '@/data/phase3';
+import { TICKER_TAGS, type TickerTag, type TickerEntry } from '@/data/hooks';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'ticker' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'ticker', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
   const { roles } = useAuth();
@@ -70,6 +71,12 @@ export function AdminDashboard() {
           News
         </button>
         <button
+          onClick={() => setTab('ticker')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'ticker' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Live Ticker
+        </button>
+        <button
           onClick={() => setTab('fixture')}
           className={`px-4 py-2 text-sm font-semibold ${tab === 'fixture' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
         >
@@ -117,6 +124,7 @@ export function AdminDashboard() {
 
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
+        {tab === 'ticker' && <TickerForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'players' && <PlayersPanel teams={teams} />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
@@ -125,6 +133,168 @@ export function AdminDashboard() {
         {tab === 'sponsors' && <SponsorForm />}
         {tab === 'coaches' && isAdmin && <CoachesForm teams={teams} />}
       </div>
+    </div>
+  );
+}
+
+function TickerForm() {
+  const sb = getSupabase()!;
+  const [entries, setEntries] = useState<TickerEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [label, setLabel] = useState('');
+  const [href, setHref] = useState('');
+  const [tag, setTag] = useState<TickerTag>('NEWS');
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+
+  async function refresh() {
+    setLoading(true);
+    const { data, error } = await sb
+      .from('ticker_entries')
+      .select('id, label, href, tag, sort')
+      .order('sort', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setLoading(false);
+    if (error) { setStatus(`Load failed: ${error.message}`); return; }
+    setEntries((data ?? []).map((r) => ({
+      id: r.id as string,
+      label: r.label as string,
+      href: (r.href as string | null) ?? null,
+      tag: (r.tag as string) ?? 'NEWS',
+      sort: (r.sort as number) ?? 0,
+    })));
+  }
+
+  useEffect(() => { void refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const atCap = entries.length >= 6;
+
+  async function onAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!label.trim() || atCap) return;
+    setBusy(true);
+    setStatus(null);
+    const nextSort = entries.length === 0 ? 0 : Math.max(...entries.map((x) => x.sort)) + 1;
+    const { error } = await sb.from('ticker_entries').insert({
+      label: label.trim(),
+      href: href.trim() || null,
+      tag,
+      sort: nextSort,
+      active: true,
+    });
+    setBusy(false);
+    if (error) { setStatus(`Add failed: ${error.message}`); return; }
+    setLabel(''); setHref(''); setTag('NEWS');
+    setStatus('Added.');
+    await refresh();
+  }
+
+  async function onDelete(id: string) {
+    if (!confirm('Remove this ticker entry?')) return;
+    const { error } = await sb.from('ticker_entries').delete().eq('id', id);
+    if (error) { setStatus(`Delete failed: ${error.message}`); return; }
+    setStatus('Removed.');
+    await refresh();
+  }
+
+  function tagPillClass(t: string): string {
+    switch (t) {
+      case 'RESULT':  return 'bg-pitch text-white';
+      case 'FIXTURE': return 'bg-slate-700 text-white';
+      case 'NEWS':    return 'bg-gold text-navy';
+      case 'NOTICE':  return 'bg-red-500 text-white';
+      case 'EVENT':   return 'bg-sky-500 text-white';
+      default:        return 'bg-slate-300 text-slate-800';
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="card p-6">
+        <h2 className="font-display text-navy">Live Ticker</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Curated entries shown at the top of every page, before the auto-generated fixtures and
+          results. Maximum 6 entries.
+        </p>
+
+        <ul className="mt-5 divide-y divide-slate-200">
+          {loading && <li className="py-3 text-sm text-slate-500">Loading…</li>}
+          {!loading && entries.length === 0 && (
+            <li className="py-3 text-sm text-slate-500">No custom ticker entries yet.</li>
+          )}
+          {entries.map((e) => (
+            <li key={e.id} className="flex items-center gap-3 py-3">
+              <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagPillClass(e.tag)}`}>
+                {e.tag}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium text-slate-900">{e.label}</div>
+                {e.href && (
+                  <div className="truncate text-xs text-slate-500">{e.href}</div>
+                )}
+              </div>
+              <button
+                onClick={() => void onDelete(e.id)}
+                className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <form onSubmit={onAdd} className="card space-y-4 p-6">
+        <h3 className="font-display text-navy">Add ticker entry</h3>
+        {atCap && (
+          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Ticker is full (6 entries). Remove one above to add another.
+          </p>
+        )}
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="text-sm md:col-span-2">
+            <span className="font-semibold">Label *</span>
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              required
+              maxLength={140}
+              placeholder="e.g. Field closed Sunday — pitch maintenance"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="font-semibold">Tag / icon</span>
+            <select
+              value={tag}
+              onChange={(e) => setTag(e.target.value as TickerTag)}
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            >
+              {TICKER_TAGS.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            <span className="font-semibold">Link (optional)</span>
+            <input
+              value={href}
+              onChange={(e) => setHref(e.target.value)}
+              placeholder="/news or https://…"
+              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            />
+          </label>
+        </div>
+        {status && <div className="text-sm text-slate-700">{status}</div>}
+        <button
+          type="submit"
+          disabled={busy || atCap || !label.trim()}
+          className="rounded bg-navy px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {busy ? 'Adding…' : 'Add to ticker'}
+        </button>
+      </form>
     </div>
   );
 }
