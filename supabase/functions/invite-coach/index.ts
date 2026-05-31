@@ -31,7 +31,13 @@ function json(body: unknown, status = 200) {
   });
 }
 
-type Mode = 'invite' | 'create' | 'set_password' | 'self_register';
+type Mode =
+  | 'invite'
+  | 'create'
+  | 'set_password'
+  | 'self_register'
+  | 'get_coach'
+  | 'update_coach';
 
 type Body = {
   mode?: Mode;
@@ -174,6 +180,64 @@ serve(async (req) => {
     if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, 400);
     const { error } = await admin.auth.admin.updateUserById(user_id, { password });
     if (error) return json({ error: `Password reset failed: ${error.message}` }, 500);
+    return json({ ok: true, user_id });
+  }
+
+  // =================================================================
+  // Mode: get_coach — admin-only fetch of email + display_name
+  // =================================================================
+  if (mode === 'get_coach') {
+    const gate = await requireAdmin();
+    if (gate instanceof Response) return gate;
+    const user_id = (body.user_id ?? '').trim();
+    if (!user_id) return json({ error: 'user_id required' }, 400);
+    const { data: userData, error: uerr } = await admin.auth.admin.getUserById(user_id);
+    if (uerr) return json({ error: `Lookup failed: ${uerr.message}` }, 500);
+    const { data: prof } = await admin
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user_id)
+      .maybeSingle();
+    return json({
+      ok: true,
+      user_id,
+      email: userData.user?.email ?? '',
+      display_name: prof?.display_name ?? '',
+    });
+  }
+
+  // =================================================================
+  // Mode: update_coach — admin-only update of email and/or display_name
+  // =================================================================
+  if (mode === 'update_coach') {
+    const gate = await requireAdmin();
+    if (gate instanceof Response) return gate;
+    const user_id = (body.user_id ?? '').trim();
+    if (!user_id) return json({ error: 'user_id required' }, 400);
+    const newEmail = (body.email ?? '').trim().toLowerCase();
+    const newDisplayName = (body.display_name ?? '').trim();
+    if (!newEmail && !newDisplayName) {
+      return json({ error: 'email or display_name required' }, 400);
+    }
+    if (newEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+        return json({ error: 'Invalid email' }, 400);
+      }
+      const { error: aerr } = await admin.auth.admin.updateUserById(user_id, {
+        email: newEmail,
+        email_confirm: true,
+      });
+      if (aerr) return json({ error: `Email update failed: ${aerr.message}` }, 500);
+    }
+    if (newDisplayName) {
+      const { error: perr } = await admin
+        .from('profiles')
+        .upsert(
+          { id: user_id, display_name: newDisplayName, updated_at: new Date().toISOString() },
+          { onConflict: 'id' },
+        );
+      if (perr) return json({ error: `Profile update failed: ${perr.message}` }, 500);
+    }
     return json({ ok: true, user_id });
   }
 

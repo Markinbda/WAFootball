@@ -977,6 +977,10 @@ function CoachRow({
         </div>
         <div className="flex gap-2">
           <ResetPasswordButton userId={group.userId} />
+          <EditCoachButton
+            userId={group.userId}
+            currentDisplayName={group.displayName}
+          />
           <Link
             to={`/coach?as=${group.userId}`}
             className="rounded border border-navy px-3 py-1 text-xs font-semibold text-navy hover:bg-navy hover:text-white"
@@ -1154,6 +1158,164 @@ function ResetPasswordButton({ userId }: { userId: string }) {
               {busy ? 'Saving�' : 'Set password'}
             </button>
           </div>
+          {msg && (
+            <div className={`mt-2 text-xs ${ok ? 'text-pitch' : 'text-red-600'}`}>{msg}</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EditCoachButton({
+  userId,
+  currentDisplayName,
+}: {
+  userId: string;
+  currentDisplayName: string;
+}) {
+  const sb = getSupabase();
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [displayName, setDisplayName] = useState(currentDisplayName);
+  const [email, setEmail] = useState('');
+  const [origEmail, setOrigEmail] = useState('');
+  const [origDisplayName, setOrigDisplayName] = useState(currentDisplayName);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  async function callFn(body: Record<string, unknown>) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const { data: { session } } = await sb!.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Not signed in');
+    const res = await fetch(`${supabaseUrl}/functions/v1/invite-coach`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
+        apikey: anonKey,
+      },
+      body: JSON.stringify(body),
+    });
+    let out: { ok?: boolean; error?: string; email?: string; display_name?: string } = {};
+    try {
+      out = await res.json();
+    } catch {
+      out = { error: `HTTP ${res.status}` };
+    }
+    if (!res.ok || !out.ok) throw new Error(out.error ?? `HTTP ${res.status}`);
+    return out;
+  }
+
+  async function openAndLoad() {
+    if (!sb) return;
+    setOpen(true);
+    setMsg(null);
+    setOk(false);
+    setLoading(true);
+    try {
+      const out = await callFn({ mode: 'get_coach', user_id: userId });
+      const e = out.email ?? '';
+      const d = out.display_name ?? currentDisplayName;
+      setEmail(e);
+      setOrigEmail(e);
+      setDisplayName(d);
+      setOrigDisplayName(d);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Failed to load');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function save() {
+    if (!sb) return;
+    setBusy(true);
+    setMsg(null);
+    const body: Record<string, unknown> = { mode: 'update_coach', user_id: userId };
+    if (email.trim() && email.trim().toLowerCase() !== origEmail.toLowerCase()) {
+      body.email = email.trim();
+    }
+    if (displayName.trim() && displayName.trim() !== origDisplayName) {
+      body.display_name = displayName.trim();
+    }
+    if (!body.email && !body.display_name) {
+      setBusy(false);
+      setMsg('No changes.');
+      return;
+    }
+    try {
+      await callFn(body);
+      setOk(true);
+      setMsg('Saved. Reloading…');
+      setTimeout(() => window.location.reload(), 900);
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => (open ? setOpen(false) : void openAndLoad())}
+        className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-navy hover:text-navy"
+      >
+        Edit
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-2 w-80 rounded-md border border-slate-200 bg-white p-3 text-left shadow-lg">
+          {loading ? (
+            <div className="text-xs text-slate-500">Loading…</div>
+          ) : (
+            <>
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Full name
+              </label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                className="input mt-1 text-sm"
+                placeholder="Full name"
+              />
+              <label className="mt-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="input mt-1 text-sm"
+                placeholder="coach@example.com"
+              />
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setMsg(null);
+                  }}
+                  className="text-xs text-slate-500 hover:text-navy"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={save}
+                  disabled={busy}
+                  className="rounded bg-navy px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                >
+                  {busy ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </>
+          )}
           {msg && (
             <div className={`mt-2 text-xs ${ok ? 'text-pitch' : 'text-red-600'}`}>{msg}</div>
           )}
