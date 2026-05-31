@@ -1059,16 +1059,42 @@ function ResetPasswordButton({ userId }: { userId: string }) {
     }
     setBusy(true);
     setMsg(null);
-    const { data, error } = await sb.functions.invoke('invite-coach', {
-      body: { mode: 'set_password', user_id: userId, password: pw },
-    });
-    setBusy(false);
-    if (error) {
-      setMsg(error.message);
+    // Use direct fetch so we can surface the actual edge-function error body
+    // instead of the generic "Edge Function returned a non-2xx status code".
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+    const { data: { session } } = await sb.auth.getSession();
+    const token = session?.access_token;
+    if (!token) {
+      setBusy(false);
+      setMsg('Not signed in.');
       return;
     }
-    const result = data as { ok?: boolean; error?: string };
-    if (result?.ok) {
+    let result: { ok?: boolean; error?: string } = {};
+    let status = 0;
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/invite-coach`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: `Bearer ${token}`,
+          apikey: anonKey,
+        },
+        body: JSON.stringify({ mode: 'set_password', user_id: userId, password: pw }),
+      });
+      status = res.status;
+      try {
+        result = await res.json();
+      } catch {
+        result = { error: await res.text().catch(() => `HTTP ${status}`) };
+      }
+    } catch (e) {
+      setBusy(false);
+      setMsg(e instanceof Error ? e.message : 'Network error');
+      return;
+    }
+    setBusy(false);
+    if (status >= 200 && status < 300 && result?.ok) {
       setOk(true);
       setMsg('Password updated.');
       setPw('');
@@ -1078,7 +1104,7 @@ function ResetPasswordButton({ userId }: { userId: string }) {
         setMsg(null);
       }, 1500);
     } else {
-      setMsg(result?.error ?? 'Unknown error');
+      setMsg(result?.error ?? `HTTP ${status}`);
     }
   }
 
@@ -1125,7 +1151,7 @@ function ResetPasswordButton({ userId }: { userId: string }) {
               disabled={busy || pw.length < 8}
               className="rounded bg-navy px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
             >
-              {busy ? 'Saving…' : 'Set password'}
+              {busy ? 'Savingï¿½' : 'Set password'}
             </button>
           </div>
           {msg && (
