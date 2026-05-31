@@ -88,6 +88,9 @@ export function Signup() {
           <p className="text-center text-xs text-slate-500">
             Already a member? <Link to="/login" className="font-semibold">Sign in</Link>
           </p>
+          <p className="text-center text-xs text-slate-500">
+            Volunteering as a coach? <Link to="/signup/coach" className="font-semibold">Sign up as a coach</Link>
+          </p>
         </form>
       )}
     </div>

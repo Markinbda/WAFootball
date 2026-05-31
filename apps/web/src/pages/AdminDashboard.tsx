@@ -3,12 +3,11 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePlayers } from '@/data/phase3';
-import { TICKER_TAGS, type TickerTag, type TickerEntry, useFixtures, useResults } from '@/data/hooks';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'ticker' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'ticker', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
   const { roles } = useAuth();
@@ -71,12 +70,6 @@ export function AdminDashboard() {
           News
         </button>
         <button
-          onClick={() => setTab('ticker')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'ticker' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Live Ticker
-        </button>
-        <button
           onClick={() => setTab('fixture')}
           className={`px-4 py-2 text-sm font-semibold ${tab === 'fixture' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
         >
@@ -124,7 +117,6 @@ export function AdminDashboard() {
 
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
-        {tab === 'ticker' && <TickerForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'players' && <PlayersPanel teams={teams} />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
@@ -132,244 +124,6 @@ export function AdminDashboard() {
         {tab === 'gallery' && <GalleryForm teams={teams} />}
         {tab === 'sponsors' && <SponsorForm />}
         {tab === 'coaches' && isAdmin && <CoachesForm teams={teams} />}
-      </div>
-    </div>
-  );
-}
-
-function TickerForm() {
-  const sb = getSupabase()!;
-  const [entries, setEntries] = useState<TickerEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [label, setLabel] = useState('');
-  const [href, setHref] = useState('');
-  const [tag, setTag] = useState<TickerTag>('NEWS');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-
-  const { data: fixtures } = useFixtures();
-  const { data: results } = useResults();
-
-  async function refresh() {
-    setLoading(true);
-    const { data, error } = await sb
-      .from('ticker_entries')
-      .select('id, label, href, tag, sort')
-      .order('sort', { ascending: true })
-      .order('created_at', { ascending: false })
-      .limit(20);
-    setLoading(false);
-    if (error) { setStatus(`Load failed: ${error.message}`); return; }
-    setEntries((data ?? []).map((r) => ({
-      id: r.id as string,
-      label: r.label as string,
-      href: (r.href as string | null) ?? null,
-      tag: (r.tag as string) ?? 'NEWS',
-      sort: (r.sort as number) ?? 0,
-    })));
-  }
-
-  useEffect(() => { void refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const atCap = entries.length >= 6;
-
-  async function onAdd(e: React.FormEvent) {
-    e.preventDefault();
-    if (!label.trim() || atCap) return;
-    setBusy(true);
-    setStatus(null);
-    const nextSort = entries.length === 0 ? 0 : Math.max(...entries.map((x) => x.sort)) + 1;
-    const { error } = await sb.from('ticker_entries').insert({
-      label: label.trim(),
-      href: href.trim() || null,
-      tag,
-      sort: nextSort,
-      active: true,
-    });
-    setBusy(false);
-    if (error) { setStatus(`Add failed: ${error.message}`); return; }
-    setLabel(''); setHref(''); setTag('NEWS');
-    setStatus('Added.');
-    await refresh();
-  }
-
-  async function onDelete(id: string) {
-    if (!confirm('Remove this ticker entry?')) return;
-    const { error } = await sb.from('ticker_entries').delete().eq('id', id);
-    if (error) { setStatus(`Delete failed: ${error.message}`); return; }
-    setStatus('Removed.');
-    await refresh();
-  }
-
-  function tagPillClass(t: string): string {
-    switch (t) {
-      case 'RESULT':  return 'bg-pitch text-white';
-      case 'FIXTURE': return 'bg-slate-700 text-white';
-      case 'NEWS':    return 'bg-gold text-navy';
-      case 'NOTICE':  return 'bg-red-500 text-white';
-      case 'EVENT':   return 'bg-sky-500 text-white';
-      default:        return 'bg-slate-300 text-slate-800';
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="card p-6">
-        <h2 className="font-display text-navy">Live Ticker</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Curated entries shown at the top of every page, before the auto-generated fixtures and
-          results. Maximum 6 entries.
-        </p>
-
-        <ul className="mt-5 divide-y divide-slate-200">
-          {loading && <li className="py-3 text-sm text-slate-500">Loading…</li>}
-          {!loading && entries.length === 0 && (
-            <li className="py-3 text-sm text-slate-500">No custom ticker entries yet.</li>
-          )}
-          {entries.map((e) => (
-            <li key={e.id} className="flex items-center gap-3 py-3">
-              <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tagPillClass(e.tag)}`}>
-                {e.tag}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-slate-900">{e.label}</div>
-                {e.href && (
-                  <div className="truncate text-xs text-slate-500">{e.href}</div>
-                )}
-              </div>
-              <button
-                onClick={() => void onDelete(e.id)}
-                className="rounded border border-red-300 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
-              >
-                Remove
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <form onSubmit={onAdd} className="card space-y-4 p-6">
-        <h3 className="font-display text-navy">Add ticker entry</h3>
-        {atCap && (
-          <p className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Ticker is full (6 entries). Remove one above to add another.
-          </p>
-        )}
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="text-sm md:col-span-2">
-            <span className="font-semibold">Label *</span>
-            <input
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              required
-              maxLength={140}
-              placeholder="e.g. Field closed Sunday — pitch maintenance"
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            />
-          </label>
-          <label className="text-sm">
-            <span className="font-semibold">Tag / icon</span>
-            <select
-              value={tag}
-              onChange={(e) => setTag(e.target.value as TickerTag)}
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            >
-              {TICKER_TAGS.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="font-semibold">Link (optional)</span>
-            <input
-              value={href}
-              onChange={(e) => setHref(e.target.value)}
-              placeholder="/news or https://…"
-              className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
-            />
-          </label>
-        </div>
-        {status && <div className="text-sm text-slate-700">{status}</div>}
-        <button
-          type="submit"
-          disabled={busy || atCap || !label.trim()}
-          className="rounded bg-navy px-5 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy ? 'Adding…' : 'Add to ticker'}
-        </button>
-      </form>
-
-      <div className="card p-6">
-        <h3 className="font-display text-navy">Auto entries currently on ticker</h3>
-        <p className="mt-1 text-sm text-slate-600">
-          These come from your published fixtures and results and appear automatically — managed
-          from the <span className="font-semibold">Fixtures &amp; Results</span> tab, not here.
-        </p>
-        <ul className="mt-4 divide-y divide-slate-200">
-          {(() => {
-            type AutoItem = {
-              key: string;
-              kind: 'RESULT' | 'FIXTURE';
-              sortDate: number;
-              label: string;
-            };
-            // Interleave results and fixtures (each list newest-first) so the
-            // ticker doesn't show one big block of fixtures followed by one
-            // big block of results.
-            const r = [...results]
-              .slice(0, 8)
-              .map((x): AutoItem => {
-                const verdict =
-                  x.scoreFor > x.scoreAgainst ? 'WIN' : x.scoreFor < x.scoreAgainst ? 'LOSS' : 'DRAW';
-                const date = new Date(x.date)
-                  .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                  .toUpperCase();
-                return {
-                  key: `r-${x.id}`,
-                  kind: 'RESULT',
-                  sortDate: new Date(x.date).getTime(),
-                  label: `${date} · ${x.venue.toUpperCase()} ${verdict} ${x.scoreFor}–${x.scoreAgainst} · ${x.team} v ${x.opponent}`,
-                };
-              });
-            const f = [...fixtures]
-              .slice(0, 8)
-              .map((x): AutoItem => {
-                const date = new Date(x.date)
-                  .toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
-                  .toUpperCase();
-                const time = new Date(x.date).toLocaleTimeString('en-GB', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-                return {
-                  key: `f-${x.id}`,
-                  kind: 'FIXTURE',
-                  sortDate: new Date(x.date).getTime(),
-                  label: `${date} · ${time} · ${x.venue.toUpperCase()} · ${x.team} v ${x.opponent}`,
-                };
-              });
-            const items: AutoItem[] = [];
-            for (let i = 0; i < Math.max(r.length, f.length); i++) {
-              if (i < r.length) items.push(r[i]);
-              if (i < f.length) items.push(f[i]);
-            }
-            if (items.length === 0) {
-              return <li className="py-2 text-sm text-slate-500">No fixtures or results yet.</li>;
-            }
-            return items.map((it) => (
-              <li key={it.key} className="flex items-center gap-3 py-2">
-                <span
-                  className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ${
-                    it.kind === 'RESULT' ? 'bg-pitch' : 'bg-slate-700'
-                  }`}
-                >
-                  {it.kind}
-                </span>
-                <div className="min-w-0 flex-1 truncate text-sm text-slate-800">{it.label}</div>
-              </li>
-            ));
-          })()}
-        </ul>
       </div>
     </div>
   );
@@ -1003,21 +757,10 @@ type CoachAssignmentRow = {
 type CoachGroup = {
   userId: string;
   displayName: string;
-  avatarUrl: string | null;
-  title: string | null;
-  bio: string | null;
-  phone: string | null;
   teams: { id: string; name: string; slug: string }[];
 };
 
-type ProfileOption = {
-  id: string;
-  display_name: string;
-  avatar_url: string | null;
-  title: string | null;
-  bio: string | null;
-  phone: string | null;
-};
+type ProfileOption = { id: string; display_name: string };
 
 function CoachesForm({ teams }: { teams: TeamOption[] }) {
   const sb = getSupabase()!;
@@ -1032,29 +775,20 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
 
   async function load() {
     setLoading(true);
-    try {
-      const [{ data: tc, error: tcErr }, { data: prof, error: profErr }] = await Promise.all([
-        sb
-          .from('team_coaches')
-          .select('team_id, user_id, created_at, teams:teams(id,name,slug)')
-          .order('created_at', { ascending: true }),
-        sb
-          .from('profiles')
-          .select('id, display_name, avatar_url, title, bio, phone')
-          .order('display_name'),
-      ]);
-      if (tcErr) {
-        setStatus(`Error loading coaches: ${tcErr.message}`);
-        return;
-      }
-      if (profErr) console.error('[CoachesForm profiles]', profErr);
-      setRows((tc ?? []) as unknown as CoachAssignmentRow[]);
-      setProfiles((prof ?? []) as ProfileOption[]);
-    } catch (e) {
-      console.error('[CoachesForm load] threw', e);
-    } finally {
-      setLoading(false);
+    const [{ data: tc, error: tcErr }, { data: prof }] = await Promise.all([
+      sb
+        .from('team_coaches')
+        .select('team_id, user_id, created_at, teams:teams(id,name,slug)')
+        .order('created_at', { ascending: true }),
+      sb.from('profiles').select('id, display_name').order('display_name'),
+    ]);
+    setLoading(false);
+    if (tcErr) {
+      setStatus(`Error loading coaches: ${tcErr.message}`);
+      return;
     }
+    setRows((tc ?? []) as unknown as CoachAssignmentRow[]);
+    setProfiles((prof ?? []) as ProfileOption[]);
   }
 
   useEffect(() => {
@@ -1063,20 +797,12 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
   }, []);
 
   const groups: CoachGroup[] = useMemo(() => {
-    const profById = new Map(profiles.map((p) => [p.id, p]));
+    const nameById = new Map(profiles.map((p) => [p.id, p.display_name]));
     const byUser = new Map<string, CoachGroup>();
     for (const r of rows) {
       if (!r.user_id) continue;
-      const p = profById.get(r.user_id);
-      const g = byUser.get(r.user_id) ?? {
-        userId: r.user_id,
-        displayName: p?.display_name ?? '(unknown user)',
-        avatarUrl: p?.avatar_url ?? null,
-        title: p?.title ?? null,
-        bio: p?.bio ?? null,
-        phone: p?.phone ?? null,
-        teams: [],
-      };
+      const name = nameById.get(r.user_id) ?? '(unknown user)';
+      const g = byUser.get(r.user_id) ?? { userId: r.user_id, displayName: name, teams: [] };
       const teamList = Array.isArray(r.teams) ? r.teams : r.teams ? [r.teams] : [];
       for (const t of teamList) g.teams.push(t);
       byUser.set(r.user_id, g);
@@ -1143,10 +869,8 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
 
   return (
     <div className="space-y-6">
-      <InviteCoachForm teams={teams} onInvited={load} />
-
       <form onSubmit={addAssignment} className="card max-w-2xl space-y-4 p-6">
-        <h2 className="text-xl font-semibold">Assign an existing user as coach</h2>
+        <h2 className="text-xl font-semibold">Assign a coach</h2>
         <p className="text-sm text-slate-600">
           Pick any registered user and a team. Both fields are required. The user
           becomes a coach for that team (and can manage the team calendar).
@@ -1219,7 +943,6 @@ function CoachesForm({ teams }: { teams: TeamOption[] }) {
               allTeams={teams}
               onRemove={(teamId) => removeAssignment(g.userId, teamId)}
               onAddTeam={(teamId) => addTeamToCoach(g.userId, teamId)}
-              onSaved={load}
             />
           ))}
         </ul>
@@ -1233,16 +956,13 @@ function CoachRow({
   allTeams,
   onRemove,
   onAddTeam,
-  onSaved,
 }: {
   group: CoachGroup;
   allTeams: TeamOption[];
   onRemove: (teamId: string) => void;
   onAddTeam: (teamId: string) => void;
-  onSaved: () => Promise<void> | void;
 }) {
   const [extraTeam, setExtraTeam] = useState('');
-  const [editing, setEditing] = useState(false);
   const availableTeams = useMemo(() => {
     const taken = new Set(group.teams.map((t) => t.id));
     return allTeams.filter((t) => !taken.has(t.id));
@@ -1251,40 +971,12 @@ function CoachRow({
   return (
     <li className="py-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {group.avatarUrl ? (
-            <img
-              src={group.avatarUrl}
-              alt=""
-              className="h-10 w-10 rounded-full border border-slate-200 object-cover"
-            />
-          ) : (
-            <div
-              className="grid h-10 w-10 place-items-center rounded-full bg-slate-200 text-xs font-semibold text-slate-600"
-              aria-hidden
-            >
-              {group.displayName
-                .split(' ')
-                .map((s) => s[0])
-                .slice(0, 2)
-                .join('')
-                .toUpperCase()}
-            </div>
-          )}
-          <div>
-            <div className="font-semibold text-navy">{group.displayName}</div>
-            {group.title && <div className="text-xs text-slate-600">{group.title}</div>}
-            <div className="text-[10px] text-slate-400">{group.userId}</div>
-          </div>
+        <div>
+          <div className="font-semibold text-navy">{group.displayName}</div>
+          <div className="text-xs text-slate-500">{group.userId}</div>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setEditing((v) => !v)}
-            className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-          >
-            {editing ? 'Close' : 'Edit details'}
-          </button>
+          <ResetPasswordButton userId={group.userId} />
           <Link
             to={`/coach?as=${group.userId}`}
             className="rounded border border-navy px-3 py-1 text-xs font-semibold text-navy hover:bg-navy hover:text-white"
@@ -1293,8 +985,6 @@ function CoachRow({
           </Link>
         </div>
       </div>
-
-      {editing && <CoachDetailsEditor group={group} onSaved={async () => { await onSaved(); setEditing(false); }} />}
 
       <div className="mt-2 flex flex-wrap gap-2">
         {group.teams.map((t) => (
@@ -1351,272 +1041,98 @@ function CoachRow({
   );
 }
 
-// ===================================================================
-// Invite-a-new-coach form (calls the `invite-coach` Edge Function)
-// ===================================================================
-function InviteCoachForm({
-  teams,
-  onInvited,
-}: {
-  teams: TeamOption[];
-  onInvited: () => Promise<void> | void;
-}) {
-  const sb = getSupabase()!;
-  const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [title, setTitle] = useState('');
-  const [teamId, setTeamId] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!email.trim() || !displayName.trim()) return;
+
+function ResetPasswordButton({ userId }: { userId: string }) {
+  const sb = getSupabase();
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+
+  async function submit() {
+    if (!sb) return;
+    if (pw.length < 8) {
+      setMsg('Password must be at least 8 characters.');
+      return;
+    }
     setBusy(true);
-    setStatus(null);
-    try {
-      // Hard timeout — don't let the UI hang forever if the function stalls.
-      const invokePromise = sb.functions.invoke('invite-coach', {
-        body: {
-          email: email.trim().toLowerCase(),
-          display_name: displayName.trim(),
-          title: title.trim() || undefined,
-          team_id: teamId || undefined,
-          redirect_to: `${window.location.origin}/login`,
-        },
-      });
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out after 30s')), 30_000),
-      );
-      const { data, error } = (await Promise.race([invokePromise, timeoutPromise])) as Awaited<typeof invokePromise>;
-      if (error) {
-        // Try to surface the function's JSON error body even on non-2xx.
-        let detail = error.message;
-        const ctx = (error as { context?: { body?: unknown } }).context;
-        if (ctx?.body) {
-          try {
-            const parsed = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : ctx.body;
-            if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-              detail = String((parsed as { error: unknown }).error);
-            }
-          } catch { /* ignore */ }
-        }
-        setStatus(`Invite failed: ${detail}`);
-        return;
-      }
-      const body = data as {
-        ok?: boolean;
-        error?: string;
-        invited?: boolean;
-        resent?: boolean;
-        email_sent?: boolean;
-        email_note?: string | null;
-      } | null;
-      if (!body?.ok) {
-        setStatus(`Invite failed: ${body?.error ?? 'unknown error'}`);
-        return;
-      }
-      const base = body.invited
-        ? `Invite sent to ${email}. They will receive a magic-link email.`
-        : body.resent
-          ? `User ${email} already existed — a fresh sign-in link has been re-sent and coach role granted.`
-          : `User ${email} already existed — profile updated and coach role granted (no email re-sent).`;
-      setStatus(body.email_note ? `${base}\n\n⚠ ${body.email_note}` : base);
-      setEmail('');
-      setDisplayName('');
-      setTitle('');
-      setTeamId('');
-      await onInvited();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatus(`Invite failed: ${msg}`);
-    } finally {
-      setBusy(false);
+    setMsg(null);
+    const { data, error } = await sb.functions.invoke('invite-coach', {
+      body: { mode: 'set_password', user_id: userId, password: pw },
+    });
+    setBusy(false);
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+    const result = data as { ok?: boolean; error?: string };
+    if (result?.ok) {
+      setOk(true);
+      setMsg('Password updated.');
+      setPw('');
+      setTimeout(() => {
+        setOpen(false);
+        setOk(false);
+        setMsg(null);
+      }, 1500);
+    } else {
+      setMsg(result?.error ?? 'Unknown error');
     }
   }
 
   return (
-    <form onSubmit={onSubmit} className="card max-w-2xl space-y-4 p-6">
-      <div>
-        <h2 className="text-xl font-semibold">Invite a new coach</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Sends a magic-link invite to the email you provide. On first sign-in
-          they will land on the site already promoted to coach. Run after
-          deploying the <code>invite-coach</code> Edge Function.
-        </p>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Email">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="input"
-            placeholder="coach@example.com"
-          />
-        </Field>
-        <Field label="Display name">
-          <input
-            type="text"
-            required
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="input"
-            placeholder="Richard Todd"
-          />
-        </Field>
-        <Field label="Title (optional)">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="input"
-            placeholder="Head Coach U-15"
-          />
-        </Field>
-        <Field label="Assign to team (optional)">
-          <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
-            <option value="">— None —</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
-      {status && (
-        <p className={`whitespace-pre-line text-sm ${status.startsWith('Invite failed') ? 'text-red-700' : 'text-pitch'}`}>
-          {status}
-        </p>
-      )}
-      <button type="submit" className="btn-primary" disabled={busy}>
-        {busy ? 'Sending invite…' : 'Send invite'}
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="rounded border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-navy hover:text-navy"
+      >
+        Reset password
       </button>
-    </form>
-  );
-}
-
-// ===================================================================
-// Per-coach details editor (avatar + title + bio + phone)
-// ===================================================================
-function CoachDetailsEditor({
-  group,
-  onSaved,
-}: {
-  group: CoachGroup;
-  onSaved: () => Promise<void> | void;
-}) {
-  const sb = getSupabase()!;
-  const [displayName, setDisplayName] = useState(group.displayName);
-  const [title, setTitle] = useState(group.title ?? '');
-  const [bio, setBio] = useState(group.bio ?? '');
-  const [phone, setPhone] = useState(group.phone ?? '');
-  const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setStatus(null);
-    try {
-      let avatar_url: string | null | undefined = undefined; // undefined = leave unchanged
-      if (file) {
-        const ext = file.name.split('.').pop() ?? 'jpg';
-        const path = `${group.userId}/${crypto.randomUUID()}.${ext}`;
-        const { error: upErr } = await sb.storage
-          .from('avatars')
-          .upload(path, file, { upsert: true, contentType: file.type });
-        if (upErr) {
-          setStatus(`Upload failed: ${upErr.message}`);
-          setBusy(false);
-          return;
-        }
-        avatar_url = sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
-      }
-      const patch: Record<string, unknown> = {
-        display_name: displayName.trim() || group.displayName,
-        title: title.trim() || null,
-        bio: bio.trim() || null,
-        phone: phone.trim() || null,
-        updated_at: new Date().toISOString(),
-      };
-      if (avatar_url !== undefined) patch.avatar_url = avatar_url;
-      const { error } = await sb.from('profiles').update(patch).eq('id', group.userId);
-      if (error) {
-        setStatus(`Save failed: ${error.message}`);
-        return;
-      }
-      setStatus('Saved.');
-      await onSaved();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatus(`Save failed: ${msg}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <form onSubmit={onSubmit} className="mt-4 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Display name">
+      {open && (
+        <div className="absolute right-0 z-20 mt-2 w-72 rounded-md border border-slate-200 bg-white p-3 text-left shadow-lg">
+          <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            New password
+          </label>
           <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            className="input"
+            type="password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+            className="input mt-1 text-sm"
+            placeholder="Min 8 characters"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && pw.length >= 8 && !busy) submit();
+            }}
           />
-        </Field>
-        <Field label="Title">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="input"
-            placeholder="e.g. Head Coach U-15"
-          />
-        </Field>
-        <Field label="Phone">
-          <input
-            type="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            className="input"
-            placeholder="+1 441 …"
-          />
-        </Field>
-        <Field label="Profile photo">
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="block w-full text-sm"
-          />
-        </Field>
-      </div>
-      <Field label="Bio">
-        <textarea
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-          className="input min-h-[80px]"
-          placeholder="Short bio — kept admin-only on the public site."
-        />
-      </Field>
-      {status && (
-        <p className={`text-sm ${status.startsWith('Save failed') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>
-          {status}
-        </p>
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setPw('');
+                setMsg(null);
+              }}
+              className="text-xs text-slate-500 hover:text-navy"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={busy || pw.length < 8}
+              className="rounded bg-navy px-3 py-1 text-xs font-semibold text-white disabled:opacity-50"
+            >
+              {busy ? 'Saving�' : 'Set password'}
+            </button>
+          </div>
+          {msg && (
+            <div className={`mt-2 text-xs ${ok ? 'text-pitch' : 'text-red-600'}`}>{msg}</div>
+          )}
+        </div>
       )}
-      <div className="flex justify-end">
-        <button type="submit" className="btn-primary" disabled={busy}>
-          {busy ? 'Saving…' : 'Save details'}
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
-
-

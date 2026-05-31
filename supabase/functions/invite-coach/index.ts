@@ -1,22 +1,19 @@
-// Warwick FA — invite-coach Edge Function
+// Warwick FA — coach account management Edge Function
 //
-// Admin-only endpoint that:
-//   1. Verifies the caller has the `admin` role.
-//   2. Invites a new user by email (Supabase sends a magic-link).
-//   3. Creates / updates their `public.profiles` row with display_name + title.
-//   4. Grants them the `coach` role in `public.user_roles`.
-//   5. Optionally assigns them to a team in `public.team_coaches`.
+// Single endpoint with four `mode`s:
+//   - 'invite'        (default, admin-only) magic-link invite to a new coach
+//   - 'create'        (admin-only) create a coach with a chosen password (no email)
+//   - 'set_password'  (admin-only) reset an existing user's password
+//   - 'self_register' (public) coach self-signup with password
+//
+// All modes (except set_password) also upsert profiles, grant the coach role,
+// and optionally assign a team.
 //
 // Deploy:
 //   supabase functions deploy invite-coach --no-verify-jwt
-// Then in Supabase → Settings → Edge Functions, set the secret:
-//   SUPABASE_SERVICE_ROLE_KEY  (the service-role key from Project Settings → API)
-// The function uses `SUPABASE_URL` automatically from the platform.
-//
-// Call from the browser:
-//   await supabase.functions.invoke('invite-coach', {
-//     body: { email, display_name, title?, team_id?, redirect_to? }
-//   });
+// Required secret (Supabase → Settings → Edge Functions):
+//   SUPABASE_SERVICE_ROLE_KEY
+// SUPABASE_URL and SUPABASE_ANON_KEY are injected by the platform.
 
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
@@ -34,6 +31,23 @@ function json(body: unknown, status = 200) {
   });
 }
 
+type Mode = 'invite' | 'create' | 'set_password' | 'self_register';
+
+type Body = {
+  mode?: Mode;
+  email?: string;
+  password?: string;
+  user_id?: string;          // for set_password
+  display_name?: string;
+  title?: string;
+  phone?: string;
+  bio?: string;
+  team_id?: string;
+  redirect_to?: string;
+};
+
+type AuthUserLite = { id: string; email?: string | null; deleted_at?: string | null };
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS_HEADERS });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -45,62 +59,19 @@ serve(async (req) => {
     return json({ error: 'Edge function missing SUPABASE_URL / SERVICE / ANON env vars' }, 500);
   }
 
-  // ---- 1. Authenticate the caller and check admin role ----
-  const authHeader = req.headers.get('Authorization') ?? '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return json({ error: 'Missing bearer token' }, 401);
-  }
-
-  // Client scoped to the caller (uses their JWT) — used for the admin check.
-  const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
-    global: { headers: { Authorization: authHeader } },
-  });
-
-  const { data: userData, error: userErr } = await callerClient.auth.getUser();
-  if (userErr || !userData.user) {
-    return json({ error: 'Invalid caller token' }, 401);
-  }
-  const callerId = userData.user.id;
-
-  const { data: roles, error: roleErr } = await callerClient
-    .from('user_roles')
-    .select('role')
-    .eq('user_id', callerId);
-  if (roleErr) return json({ error: `Role lookup failed: ${roleErr.message}` }, 500);
-  const isAdmin = (roles ?? []).some((r) => r.role === 'admin');
-  if (!isAdmin) return json({ error: 'Admin only' }, 403);
-
-  // ---- 2. Parse request body ----
-  type Body = {
-    email?: string;
-    display_name?: string;
-    title?: string;
-    team_id?: string;
-    redirect_to?: string;
-  };
   let body: Body;
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Invalid JSON body' }, 400);
   }
-  const email = (body.email ?? '').trim().toLowerCase();
-  const display_name = (body.display_name ?? '').trim();
-  const title = body.title?.trim() || null;
-  const team_id = body.team_id?.trim() || null;
-  const redirect_to = body.redirect_to?.trim() || undefined;
+  const mode: Mode = body.mode ?? 'invite';
 
-  if (!email || !display_name) {
-    return json({ error: 'email and display_name are required' }, 400);
-  }
-
-  // ---- 3. Service-role client for privileged work ----
+  // Service-role client for privileged work.
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  // Per-call timeout — Supabase admin endpoints occasionally hang under SMTP
-  // pressure, which would otherwise leave the whole HTTP request unresponsive.
   async function withTimeout<T>(label: string, ms: number, p: Promise<T>): Promise<T> {
     return await Promise.race<T>([
       p,
@@ -110,15 +81,26 @@ serve(async (req) => {
     ]);
   }
 
-  // ---- 4. Invite (or look up existing) user ----
-  let userId: string | null = null;
-  let invited = false;       // true when this call created a fresh invitation
-  let resent = false;        // true when we re-sent a magic-link to an existing user
-  let emailSent = false;     // false when we hit a rate-limit but still set the user up
-  let emailNote: string | null = null;
+  async function requireAdmin(): Promise<{ callerId: string } | Response> {
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) return json({ error: 'Missing bearer token' }, 401);
+    const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: userData, error: userErr } = await callerClient.auth.getUser();
+    if (userErr || !userData.user) return json({ error: 'Invalid caller token' }, 401);
+    const callerId = userData.user.id;
+    const { data: roles, error: roleErr } = await callerClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', callerId);
+    if (roleErr) return json({ error: `Role lookup failed: ${roleErr.message}` }, 500);
+    const isAdmin = (roles ?? []).some((r) => r.role === 'admin');
+    if (!isAdmin) return json({ error: 'Admin only' }, 403);
+    return { callerId };
+  }
 
-  type AuthUserLite = { id: string; email?: string | null; deleted_at?: string | null };
-  async function findUserByEmail(): Promise<AuthUserLite | null> {
+  async function findUserByEmail(email: string): Promise<AuthUserLite | null> {
     const { data: list, error: listErr } = await withTimeout(
       'listUsers',
       10_000,
@@ -127,31 +109,193 @@ serve(async (req) => {
     if (listErr) throw new Error(`Lookup failed: ${listErr.message}`);
     return (list.users as AuthUserLite[]).find((u) => u.email?.toLowerCase() === email) ?? null;
   }
-  async function findUserIdByEmail(): Promise<string | null> {
-    return (await findUserByEmail())?.id ?? null;
+
+  async function upsertProfile(
+    userId: string,
+    display_name: string,
+    title: string | null,
+    phone: string | null,
+    bio: string | null,
+  ): Promise<Response | null> {
+    const patch: Record<string, unknown> = {
+      id: userId,
+      display_name,
+      updated_at: new Date().toISOString(),
+    };
+    if (title !== null) patch.title = title;
+    if (phone !== null) patch.phone = phone;
+    if (bio !== null) patch.bio = bio;
+    const { error } = await admin.from('profiles').upsert(patch, { onConflict: 'id' });
+    if (error) return json({ error: `Profile upsert failed: ${error.message}` }, 500);
+    return null;
   }
 
-  // If a previous "Delete user" (soft delete) left a tombstone with this email,
-  // Supabase will reject a fresh invite with "already registered" even though
-  // the row is hidden from the dashboard's default Users list. Hard-delete
-  // any such tombstone first so the invite can succeed.
-  const existing = await findUserByEmail();
-  if (existing?.deleted_at) {
-    const { error: delErr } = await admin.auth.admin.deleteUser(existing.id, true);
-    if (delErr) {
-      return json({
-        error:
-          `An old (soft-deleted) account with that email is blocking the invite and could not be removed: ${delErr.message}. ` +
-          'In the Supabase dashboard → Authentication → Users, choose "Delete user permanently" for this email and try again.',
-      }, 500);
+  async function grantCoachRole(userId: string): Promise<Response | null> {
+    const { error } = await admin
+      .from('user_roles')
+      .upsert({ user_id: userId, role: 'coach' }, { onConflict: 'user_id,role' });
+    if (error) return json({ error: `Role grant failed: ${error.message}` }, 500);
+    return null;
+  }
+
+  async function assignTeam(userId: string, teamId: string): Promise<Response | null> {
+    const { error } = await admin
+      .from('team_coaches')
+      .upsert({ user_id: userId, team_id: teamId }, { onConflict: 'team_id,user_id' });
+    if (error) return json({ error: `Team assign failed: ${error.message}` }, 500);
+    return null;
+  }
+
+  async function clearTombstone(email: string): Promise<Response | null> {
+    const existing = await findUserByEmail(email);
+    if (existing?.deleted_at) {
+      const { error: delErr } = await admin.auth.admin.deleteUser(existing.id, true);
+      if (delErr) {
+        return json({
+          error:
+            `An old (soft-deleted) account with that email is blocking creation: ${delErr.message}. ` +
+            'In Supabase dashboard → Authentication → Users, choose "Delete user permanently" and retry.',
+        }, 500);
+      }
+      console.log('[invite-coach] hard-deleted soft-deleted user', existing.id);
     }
-    console.log('[invite-coach] hard-deleted soft-deleted user', existing.id);
+    return null;
   }
 
-  // Race the invite against a timeout. If Supabase Auth's SMTP backend is
-  // wedged (common under rate limits) the call can hang forever; treat a
-  // timeout as if we had received a rate-limit error and fall through to
-  // the createUser fallback below.
+  // =================================================================
+  // Mode: set_password — admin-only password reset
+  // =================================================================
+  if (mode === 'set_password') {
+    const gate = await requireAdmin();
+    if (gate instanceof Response) return gate;
+    const password = (body.password ?? '').trim();
+    const user_id = (body.user_id ?? '').trim();
+    if (!user_id) return json({ error: 'user_id required' }, 400);
+    if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, 400);
+    const { error } = await admin.auth.admin.updateUserById(user_id, { password });
+    if (error) return json({ error: `Password reset failed: ${error.message}` }, 500);
+    return json({ ok: true, user_id });
+  }
+
+  // For all other modes we need email + display_name.
+  const email = (body.email ?? '').trim().toLowerCase();
+  const display_name = (body.display_name ?? '').trim();
+  const title = body.title?.trim() || null;
+  const phone = body.phone?.trim() || null;
+  const bio = body.bio?.trim() || null;
+  const team_id = body.team_id?.trim() || null;
+  const redirect_to = body.redirect_to?.trim() || undefined;
+  const password = (body.password ?? '').trim();
+
+  if (!email || !display_name) {
+    return json({ error: 'email and display_name are required' }, 400);
+  }
+
+  // =================================================================
+  // Mode: create — admin sets password directly, no email sent
+  // =================================================================
+  if (mode === 'create') {
+    const gate = await requireAdmin();
+    if (gate instanceof Response) return gate;
+    if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, 400);
+
+    const tomb = await clearTombstone(email);
+    if (tomb) return tomb;
+
+    let userId: string | null = null;
+    const { data: created, error: createErr } = await withTimeout(
+      'createUser',
+      12_000,
+      admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: display_name },
+      }),
+    );
+    if (createErr || !created?.user) {
+      const msg = createErr?.message?.toLowerCase() ?? '';
+      if (msg.includes('already') || msg.includes('registered')) {
+        // Existing account — update its password instead.
+        const found = await findUserByEmail(email);
+        if (!found) return json({ error: `User exists but cannot be found: ${createErr?.message}` }, 500);
+        userId = found.id;
+        const { error: updErr } = await admin.auth.admin.updateUserById(userId, {
+          password,
+          email_confirm: true,
+        });
+        if (updErr) return json({ error: `Password update failed: ${updErr.message}` }, 500);
+      } else {
+        return json({ error: `Create failed: ${createErr?.message ?? 'unknown'}` }, 500);
+      }
+    } else {
+      userId = created.user.id;
+    }
+
+    const pErr = await upsertProfile(userId, display_name, title, phone, bio);
+    if (pErr) return pErr;
+    const rErr = await grantCoachRole(userId);
+    if (rErr) return rErr;
+    if (team_id) {
+      const tErr = await assignTeam(userId, team_id);
+      if (tErr) return tErr;
+    }
+    return json({ ok: true, user_id: userId, created: true, email_sent: false });
+  }
+
+  // =================================================================
+  // Mode: self_register — public coach signup
+  // =================================================================
+  if (mode === 'self_register') {
+    if (password.length < 8) return json({ error: 'password must be at least 8 characters' }, 400);
+
+    const tomb = await clearTombstone(email);
+    if (tomb) return tomb;
+
+    const { data: created, error: createErr } = await withTimeout(
+      'createUser',
+      12_000,
+      admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: display_name },
+      }),
+    );
+    if (createErr || !created?.user) {
+      const msg = createErr?.message?.toLowerCase() ?? '';
+      if (msg.includes('already') || msg.includes('registered')) {
+        return json({
+          error: 'An account with that email already exists. Please sign in instead, or use Forgot Password.',
+        }, 409);
+      }
+      return json({ error: `Signup failed: ${createErr?.message ?? 'unknown'}` }, 500);
+    }
+    const userId = created.user.id;
+
+    const pErr = await upsertProfile(userId, display_name, title, phone, bio);
+    if (pErr) return pErr;
+    const rErr = await grantCoachRole(userId);
+    if (rErr) return rErr;
+    // Self-registered coaches start with no team assignment — admin assigns later.
+    return json({ ok: true, user_id: userId, created: true, email_sent: false });
+  }
+
+  // =================================================================
+  // Mode: invite (default) — existing magic-link flow, admin-only
+  // =================================================================
+  const gate = await requireAdmin();
+  if (gate instanceof Response) return gate;
+
+  let userId: string | null = null;
+  let invited = false;
+  let resent = false;
+  let emailSent = false;
+  let emailNote: string | null = null;
+
+  const tomb = await clearTombstone(email);
+  if (tomb) return tomb;
+
   let inv: { user: { id: string } | null } | null = null;
   let invErr: { message?: string } | null = null;
   try {
@@ -170,13 +314,16 @@ serve(async (req) => {
     invErr = { message: 'rate limit (client-side timeout): ' + (e instanceof Error ? e.message : String(e)) };
   }
 
+  async function findUserIdByEmail(): Promise<string | null> {
+    return (await findUserByEmail(email))?.id ?? null;
+  }
+
   if (invErr) {
     const msg = invErr.message?.toLowerCase() ?? '';
     const isAlready = msg.includes('already') || msg.includes('registered');
     const isRate = msg.includes('rate limit') || msg.includes('too many');
 
     if (isAlready) {
-      // User exists — find them, try re-sending a magic-link.
       userId = await findUserIdByEmail();
       if (!userId) return json({ error: 'User reported existing but not found' }, 500);
       let linkErr: { message?: string } | null = null;
@@ -201,20 +348,15 @@ serve(async (req) => {
         } else {
           emailNote = `Magic-link not re-sent: ${linkErr.message}`;
         }
-        console.warn('[invite-coach] generateLink failed:', linkErr.message);
       } else {
         resent = true;
         emailSent = true;
       }
     } else if (isRate) {
-      // Rate-limited on FIRST invite. The user may or may not have been
-      // created by a prior partial attempt — check before giving up.
       userId = await findUserIdByEmail();
       if (userId) {
-        // They exist from a prior attempt; continue and grant role.
         emailNote = 'Email rate limit reached — user already exists, role granted but no fresh email sent.';
       } else {
-        // Create the account without sending an email so admin work isn't blocked.
         const { data: created, error: createErr } = await withTimeout(
           'createUser',
           10_000,
@@ -237,34 +379,20 @@ serve(async (req) => {
     } else {
       return json({ error: `Invite failed: ${invErr.message}` }, 500);
     }
-  } else if (inv.user) {
+  } else if (inv?.user) {
     userId = inv.user.id;
     invited = true;
     emailSent = true;
   }
   if (!userId) return json({ error: 'Could not resolve user id' }, 500);
 
-  // ---- 5. Upsert profile (display_name, title) ----
-  const { error: profErr } = await admin
-    .from('profiles')
-    .upsert(
-      { id: userId, display_name, title, updated_at: new Date().toISOString() },
-      { onConflict: 'id' },
-    );
-  if (profErr) return json({ error: `Profile upsert failed: ${profErr.message}` }, 500);
-
-  // ---- 6. Grant coach role (idempotent) ----
-  const { error: roleInsErr } = await admin
-    .from('user_roles')
-    .upsert({ user_id: userId, role: 'coach' }, { onConflict: 'user_id,role' });
-  if (roleInsErr) return json({ error: `Role grant failed: ${roleInsErr.message}` }, 500);
-
-  // ---- 7. Optionally assign team ----
+  const pErr = await upsertProfile(userId, display_name, title, phone, bio);
+  if (pErr) return pErr;
+  const rErr = await grantCoachRole(userId);
+  if (rErr) return rErr;
   if (team_id) {
-    const { error: teamErr } = await admin
-      .from('team_coaches')
-      .upsert({ user_id: userId, team_id }, { onConflict: 'team_id,user_id' });
-    if (teamErr) return json({ error: `Team assign failed: ${teamErr.message}` }, 500);
+    const tErr = await assignTeam(userId, team_id);
+    if (tErr) return tErr;
   }
 
   return json({ ok: true, user_id: userId, invited, resent, email_sent: emailSent, email_note: emailNote });

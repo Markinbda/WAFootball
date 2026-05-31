@@ -9,6 +9,7 @@ import { TeamDetail } from './pages/TeamDetail';
 import { Contact } from './pages/Contact';
 import { Login } from './pages/Login';
 import { Signup } from './pages/Signup';
+import { SignupCoach } from './pages/SignupCoach';
 import { CoachDashboard } from './pages/CoachDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { FixtureDetail } from './pages/FixtureDetail';
@@ -76,6 +77,7 @@ export default function App() {
         <Route path="contact" element={<Contact />} />
         <Route path="login" element={<Login />} />
         <Route path="signup" element={<Signup />} />
+        <Route path="signup/coach" element={<SignupCoach />} />
         <Route
           path="coach"
           element={
