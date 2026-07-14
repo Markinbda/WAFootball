@@ -55,8 +55,9 @@ if (sections[0]?.title === 'PREAMBLE') {
 fs.mkdirSync(outDir, { recursive: true });
 
 // Some sections (PLAYERS, PLAYER ↔ TEAM, ACTIVITY LOG) can still be several
-// MB. Chunk those further at ~800 KB boundaries, always at statement ends.
-const MAX_BYTES = 800_000;
+// MB. Chunk those further at ~400 KB boundaries, always at statement ends —
+// the Supabase SQL Editor rejects queries much above ~500 KB.
+const MAX_BYTES = 400_000;
 
 function chunkSection(section) {
   const chunks = [];
