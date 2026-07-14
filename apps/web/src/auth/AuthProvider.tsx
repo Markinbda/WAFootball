@@ -28,12 +28,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchRoles = useCallback(async (userId: string): Promise<Role[]> => {
     if (!supabase) return [];
-    const { data, error } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId);
-    if (error || !data) return [];
-    return data.map((r) => r.role as Role);
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId);
+      if (error || !data) return [];
+      return data.map((r) => r.role as Role);
+    } catch (e) {
+      console.error('[AuthProvider fetchRoles] threw', e);
+      return [];
+    }
   }, [supabase]);
 
   useEffect(() => {
@@ -44,11 +49,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!mounted) return;
-      setSession(data.session);
-      if (data.session?.user) setRoles(await fetchRoles(data.session.user.id));
-      setReady(true);
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(data.session);
+        if (data.session?.user) {
+          const r = await fetchRoles(data.session.user.id);
+          if (mounted) setRoles(r);
+        }
+      } catch (e) {
+        console.error('[AuthProvider init] threw', e);
+      } finally {
+        if (mounted) setReady(true);
+      }
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(async (event, s) => {
@@ -60,7 +73,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // Only refresh roles if we have a user (INITIAL_SESSION may carry null
       // even when storage has a session — don't wipe roles in that case).
-      if (s?.user) setRoles(await fetchRoles(s.user.id));
+      if (s?.user) {
+        const r = await fetchRoles(s.user.id);
+        if (mounted) setRoles(r);
+      }
     });
 
     return () => {
