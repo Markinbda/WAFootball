@@ -84,7 +84,7 @@ export function useLeaderboards() {
       try {
         const { data, error } = await sb
           .from('match_events')
-          .select('player_id, type, players(full_name, teams(name, slug))')
+          .select('player_id, type, players(full_name, teams!players_team_id_fkey(name, slug))')
           .in('type', ['goal_for', 'yellow', 'red'])
           .not('player_id', 'is', null);
         if (error) console.error('[useLeaderboards]', error);

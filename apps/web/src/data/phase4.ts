@@ -161,7 +161,7 @@ export function usePlayerProfile(playerId: string | undefined) {
       try {
         const [{ data: p, error: pErr }, { data: ev, error: evErr }] = await Promise.all([
           sb.from('players')
-            .select('*, teams(name, slug)')
+            .select('*, teams!players_team_id_fkey(name, slug)')
             .eq('id', playerId)
             .single(),
           sb.from('match_events')

@@ -228,7 +228,7 @@ export function useExtendedPlayer(playerId: string | undefined) {
       try {
         const { data, error } = await sb
           .from('players')
-          .select('*, teams(name, slug)')
+          .select('*, teams!players_team_id_fkey(name, slug)')
           .eq('id', playerId)
           .maybeSingle();
         if (error) console.error('[useExtendedPlayer]', error);
