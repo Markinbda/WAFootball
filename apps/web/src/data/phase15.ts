@@ -135,17 +135,25 @@ export function useGroupTree() {
     if (!sb) { setLoading(false); return; }
     setLoading(true);
     try {
-      const { data, error } = await sb
-        .from('groups')
-        .select('*, teams(slug)')
-        .order('sort_order', { ascending: true })
-        .order('name', { ascending: true });
-      if (error) console.error('[useGroupTree]', error);
-      type Row = Omit<Group, 'team_slug'> & { teams?: { slug: string | null } | null };
-      const mapped: Group[] = ((data ?? []) as unknown as Row[]).map((r) => {
-        const { teams, ...rest } = r;
-        return { ...rest, team_slug: teams?.slug ?? null } as Group;
-      });
+      // Two independent queries — avoids PGRST embed ambiguity and RLS quirks
+      // on the teams table when joining via groups.team_id.
+      const [gRes, tRes] = await Promise.all([
+        sb.from('groups').select('*')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true }),
+        sb.from('teams').select('id, slug'),
+      ]);
+      if (gRes.error) console.error('[useGroupTree groups]', gRes.error);
+      if (tRes.error) console.error('[useGroupTree teams]', tRes.error);
+      const slugById = new Map<string, string | null>();
+      for (const t of (tRes.data ?? []) as { id: string; slug: string | null }[]) {
+        slugById.set(t.id, t.slug);
+      }
+      type Raw = Omit<Group, 'team_slug'>;
+      const mapped: Group[] = ((gRes.data ?? []) as unknown as Raw[]).map((r) => ({
+        ...r,
+        team_slug: r.team_id ? slugById.get(r.team_id) ?? null : null,
+      }));
       setFlat(mapped);
     } catch (e) {
       console.error('[useGroupTree] threw', e);
