@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
-import { usePlayers } from '@/data/phase3';
 import { useGroupTree, useAllMembers, type GroupNode, type GroupKind, type MemberRow } from '@/data/phase15';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'fixture' | 'registrations' | 'players' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'players', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
   const { ready, roles } = useAuth();
@@ -85,12 +84,6 @@ export function AdminDashboard() {
           Fixtures &amp; Results
         </button>
         <button
-          onClick={() => setTab('players')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'players' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Players
-        </button>
-        <button
           onClick={() => setTab('members')}
           className={`px-4 py-2 text-sm font-semibold ${tab === 'members' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
         >
@@ -148,7 +141,6 @@ export function AdminDashboard() {
         {tab === 'news' && <NewsForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'registrations' && isAdmin && <RegistrationsPanel />}
-        {tab === 'players' && <PlayersPanel teams={teams} />}
         {tab === 'members' && <MembersPanel />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
         {tab === 'groups' && <GroupsPanel />}
@@ -569,201 +561,6 @@ function fullName(person?: { firstName?: string; surname?: string }) {
 function address(person: RegistrationPerson) {
   const value = [person.street, person.parish, person.postcode].filter(Boolean).join(', ');
   return value || 'No address provided';
-}
-
-function PlayersPanel({ teams }: { teams: TeamOption[] }) {
-  const [teamId, setTeamId] = useState<string>('');
-
-  // Default selection to first team once teams arrive.
-  useEffect(() => {
-    if (!teamId && teams.length > 0) setTeamId(teams[0].id);
-  }, [teams, teamId]);
-
-  const { players, loading, reload } = usePlayers(teamId || undefined);
-  const sorted = [...players].sort((a, b) => {
-    const an = a.squad_number ?? 9999;
-    const bn = b.squad_number ?? 9999;
-    if (an !== bn) return an - bn;
-    return a.full_name.localeCompare(b.full_name);
-  });
-
-  return (
-    <div className="space-y-6">
-      <div className="card max-w-2xl p-6">
-        <h2 className="text-xl font-semibold">Squad</h2>
-        <p className="mt-1 text-sm text-slate-600">
-          Pick a team to view its current players. Click any player to open the full
-          profile, including parental contact information.
-        </p>
-        <div className="mt-4">
-          <Field label="Team">
-            <select
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-              className="input"
-            >
-              {teams.length === 0 && <option value="">No teams yet</option>}
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-
-        <div className="mt-5">
-          {loading ? (
-            <p className="text-sm text-slate-500">Loading squad…</p>
-          ) : sorted.length === 0 ? (
-            <p className="text-sm text-slate-500">No players on this team yet.</p>
-          ) : (
-            <ul className="divide-y divide-slate-100 rounded border border-slate-200">
-              {sorted.map((p) => (
-                <li key={p.id}>
-                  <Link
-                    to={`/players/${p.id}`}
-                    className="flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-50"
-                  >
-                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gold font-display text-xs text-navy">
-                      {p.squad_number ?? '—'}
-                    </span>
-                    <span className="flex-1 font-semibold text-navy">{p.full_name}</span>
-                    <span className="text-xs uppercase tracking-wider text-slate-500">
-                      {p.position ?? '—'}
-                    </span>
-                    {!p.active && (
-                      <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
-                        Inactive
-                      </span>
-                    )}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-      <PlayerForm teams={teams} teamId={teamId} onTeamChange={setTeamId} onCreated={reload} />
-    </div>
-  );
-}
-
-function PlayerForm({
-  teams,
-  teamId: teamIdProp,
-  onTeamChange,
-  onCreated,
-}: {
-  teams: TeamOption[];
-  teamId?: string;
-  onTeamChange?: (id: string) => void;
-  onCreated?: () => void;
-}) {
-  const sb = getSupabase()!;
-  const [teamIdLocal, setTeamIdLocal] = useState('');
-  const teamId = teamIdProp ?? teamIdLocal;
-  const setTeamId = onTeamChange ?? setTeamIdLocal;
-  const [fullName, setFullName] = useState('');
-  const [position, setPosition] = useState('');
-  const [squadNumber, setSquadNumber] = useState('');
-  const [bio, setBio] = useState('');
-  const [file, setFile] = useState<File | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!teamId) return;
-    setBusy(true); setStatus(null);
-    let photo_url: string | null = null;
-    if (file) {
-      const ext = file.name.split('.').pop() ?? 'jpg';
-      const path = `${teamId}/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await sb.storage
-        .from('player-photos')
-        .upload(path, file, { upsert: false, contentType: file.type });
-      if (upErr) {
-        setStatus(`Upload error: ${upErr.message}`);
-        setBusy(false);
-        return;
-      }
-      photo_url = sb.storage.from('player-photos').getPublicUrl(path).data.publicUrl;
-    }
-    const { error } = await sb.from('players').insert({
-      team_id: teamId,
-      full_name: fullName,
-      position: position || null,
-      squad_number: squadNumber ? Number(squadNumber) : null,
-      bio: bio || null,
-      photo_url,
-      active: true,
-    });
-    setBusy(false);
-    if (error) setStatus(`Error: ${error.message}`);
-    else {
-      setStatus('Player added.');
-      setFullName(''); setPosition(''); setSquadNumber(''); setBio(''); setFile(null);
-      onCreated?.();
-    }
-  }
-
-  return (
-    <form onSubmit={submit} className="card max-w-2xl space-y-4 p-6">
-      <h2 className="text-xl font-semibold">Add a player</h2>
-      {teams.length === 0 && (
-        <p className="rounded bg-amber-50 p-3 text-sm text-amber-800">
-          No teams in database. Add teams first.
-        </p>
-      )}
-      <Field label="Team">
-        <select required value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input">
-          <option value="">Select…</option>
-          {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-        </select>
-      </Field>
-      <Field label="Full name">
-        <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className="input" />
-      </Field>
-      <div className="grid grid-cols-2 gap-4">
-        <Field label="Position">
-          <select value={position} onChange={(e) => setPosition(e.target.value)} className="input">
-            <option value="">—</option>
-            <option>Goalkeeper</option>
-            <option>Defender</option>
-            <option>Midfielder</option>
-            <option>Forward</option>
-          </select>
-        </Field>
-        <Field label="Squad number">
-          <input
-            value={squadNumber}
-            onChange={(e) => setSquadNumber(e.target.value)}
-            className="input"
-            inputMode="numeric"
-          />
-        </Field>
-      </div>
-      <Field label="Bio">
-        <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="input" rows={3} />
-      </Field>
-      <Field label="Photo (optional)">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          className="block w-full text-sm text-slate-600 file:mr-3 file:rounded file:border-0 file:bg-navy file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-navy-600"
-        />
-      </Field>
-      {status && (
-        <p className={`text-sm ${status.startsWith('Error') || status.startsWith('Upload') ? 'text-red-700' : 'text-pitch'}`}>
-          {status}
-        </p>
-      )}
-      <button type="submit" className="btn-primary" disabled={busy}>
-        {busy ? 'Saving…' : 'Add player'}
-      </button>
-    </form>
-  );
 }
 
 function TeamPhotoForm({ teams }: { teams: TeamOption[] }) {
@@ -1612,6 +1409,34 @@ function GroupsPanel() {
   const { tree, loading, reload } = useGroupTree();
   const [openId, setOpenId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  // Once the tree loads, default to only the top-level nodes expanded so the
+  // list is compact. Users can drill in from there.
+  const initedRef = useRef(false);
+  useEffect(() => {
+    if (!initedRef.current && tree.length > 0) {
+      setExpanded(new Set(tree.map((n) => n.id)));
+      initedRef.current = true;
+    }
+  }, [tree]);
+
+  const toggle = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const expandAll = useCallback(() => {
+    const all = new Set<string>();
+    const walk = (n: GroupNode) => { all.add(n.id); n.children.forEach(walk); };
+    tree.forEach(walk);
+    setExpanded(all);
+  }, [tree]);
+
+  const collapseAll = useCallback(() => setExpanded(new Set()), []);
 
   return (
     <div className="max-w-4xl">
@@ -1622,9 +1447,25 @@ function GroupsPanel() {
             Hierarchical structure that mirrors Teamo. Click a node to add sub-groups.
           </p>
         </div>
-        <button className="btn-primary text-sm" type="button" onClick={() => setOpenId('__root__')}>
-          + New top-level group
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={expandAll}
+          >
+            Expand all
+          </button>
+          <button
+            type="button"
+            className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={collapseAll}
+          >
+            Collapse all
+          </button>
+          <button className="btn-primary text-sm" type="button" onClick={() => setOpenId('__root__')}>
+            + New top-level group
+          </button>
+        </div>
       </div>
 
       <input
@@ -1650,6 +1491,8 @@ function GroupsPanel() {
                 openId={openId}
                 setOpenId={setOpenId}
                 onChanged={reload}
+                expanded={expanded}
+                toggle={toggle}
               />
             ))}
         </ul>
@@ -1669,7 +1512,7 @@ function filterNode(n: GroupNode, q: string): boolean {
 }
 
 function GroupRow({
-  node, depth, search, openId, setOpenId, onChanged,
+  node, depth, search, openId, setOpenId, onChanged, expanded, toggle,
 }: {
   node: GroupNode;
   depth: number;
@@ -1677,9 +1520,14 @@ function GroupRow({
   openId: string | null;
   setOpenId: (v: string | null) => void;
   onChanged: () => void;
+  expanded: Set<string>;
+  toggle: (id: string) => void;
 }) {
   const sb = getSupabase()!;
   const [busy, setBusy] = useState(false);
+  // When searching, force-open every ancestor so hits are visible.
+  const isOpen = search ? true : expanded.has(node.id);
+  const hasChildren = node.children.length > 0;
 
   async function remove() {
     if (!confirm(`Delete "${node.name}" and all descendants?`)) return;
@@ -1700,17 +1548,43 @@ function GroupRow({
   return (
     <li>
       <div
-        className="flex items-center gap-3 rounded border border-slate-100 bg-white p-2 hover:bg-slate-50"
+        className="flex items-center gap-2 rounded border border-slate-100 bg-white p-2 hover:bg-slate-50"
         style={{ paddingLeft: 8 + depth * 24 }}
       >
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => toggle(node.id)}
+            className="grid h-6 w-6 shrink-0 place-items-center rounded text-slate-500 hover:bg-slate-100 hover:text-navy"
+            aria-label={isOpen ? 'Collapse' : 'Expand'}
+            aria-expanded={isOpen}
+          >
+            <span className={`inline-block transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+          </button>
+        ) : (
+          <span className="inline-block h-6 w-6 shrink-0" aria-hidden />
+        )}
         <span className={`grid h-8 w-10 place-items-center rounded text-[10px] font-bold uppercase ${kindColor[node.kind]}`}>
           {node.short_code ?? node.kind.replace('_', ' ').split(' ').map((s) => s[0]).join('')}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate font-semibold text-navy">{node.name}</div>
-          <div className="text-xs capitalize text-slate-500">
-            {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
-          </div>
+          <button
+            type="button"
+            onClick={() => hasChildren && toggle(node.id)}
+            className="block w-full text-left"
+          >
+            <div className="truncate font-semibold text-navy">
+              {node.name}
+              {hasChildren && (
+                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                  {node.children.length}
+                </span>
+              )}
+            </div>
+            <div className="text-xs capitalize text-slate-500">
+              {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
+            </div>
+          </button>
         </div>
         <button
           className="text-xs text-slate-600 hover:text-navy hover:underline"
@@ -1739,7 +1613,7 @@ function GroupRow({
         </div>
       )}
 
-      {node.children.length > 0 && (
+      {hasChildren && isOpen && (
         <ul className="mt-1 space-y-1">
           {node.children
             .filter((c) => filterNode(c, search))
@@ -1752,6 +1626,8 @@ function GroupRow({
                 openId={openId}
                 setOpenId={setOpenId}
                 onChanged={onChanged}
+                expanded={expanded}
+                toggle={toggle}
               />
             ))}
         </ul>
