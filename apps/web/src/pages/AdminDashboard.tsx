@@ -5,9 +5,9 @@ import { useAuth } from '@/auth/AuthProvider';
 import { useGroupTree, useAllMembers, type GroupNode, type GroupKind, type MemberRow } from '@/data/phase15';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'events' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'events', 'fixture', 'registrations', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
   const { ready, roles } = useAuth();
@@ -78,6 +78,12 @@ export function AdminDashboard() {
           News
         </button>
         <button
+          onClick={() => setTab('events')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'events' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Events
+        </button>
+        <button
           onClick={() => setTab('fixture')}
           className={`px-4 py-2 text-sm font-semibold ${tab === 'fixture' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
         >
@@ -139,6 +145,7 @@ export function AdminDashboard() {
 
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
+        {tab === 'events' && <EventsPanel teams={teams} />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'registrations' && isAdmin && <RegistrationsPanel />}
         {tab === 'members' && <MembersPanel />}
@@ -1928,6 +1935,381 @@ function MemberRowView({ r }: { r: MemberRow }) {
         {!r.season_opt_in && <span className="text-xs text-slate-400">—</span>}
       </td>
     </tr>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// EventsPanel — Teamo-style unified event creation
+// (Fixture / Training / Social) + upcoming list. Uses team_events + the
+// existing event_kind enum ('practice' | 'game' | 'social').
+// ---------------------------------------------------------------------------
+type TeamEventKind = 'game' | 'practice' | 'social';
+
+type TeamEventRow = {
+  id: string;
+  team_id: string;
+  kind: TeamEventKind;
+  title: string;
+  starts_at: string;
+  ends_at: string | null;
+  location: string | null;
+  opponent: string | null;
+  home_away: 'Home' | 'Away' | null;
+  notes: string | null;
+};
+
+const KIND_META: Record<TeamEventKind, { label: string; blurb: string; icon: string; badge: string }> = {
+  game:     { label: 'Fixture / Match', blurb: 'Manage availability and collect match info.', icon: '⚽', badge: 'bg-emerald-100 text-emerald-800' },
+  practice: { label: 'Training',        blurb: 'Track attendance for practices and drills.',  icon: '🏃', badge: 'bg-sky-100 text-sky-800' },
+  social:   { label: 'Social',          blurb: 'Plan team socials, end-of-season events…',    icon: '🎉', badge: 'bg-fuchsia-100 text-fuchsia-800' },
+};
+
+function EventsPanel({ teams }: { teams: TeamOption[] }) {
+  const sb = getSupabase()!;
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [formKind, setFormKind] = useState<TeamEventKind | null>(null);
+  const [rows, setRows] = useState<TeamEventRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const teamName = useCallback(
+    (id: string) => teams.find((t) => t.id === id)?.name ?? '—',
+    [teams],
+  );
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { data, error } = await sb
+        .from('team_events')
+        .select('*')
+        .gte('starts_at', new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+        .order('starts_at', { ascending: true })
+        .limit(200);
+      if (error) console.error('[EventsPanel load]', error);
+      setRows((data ?? []) as TeamEventRow[]);
+    } catch (e) {
+      console.error('[EventsPanel] threw', e);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [sb]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  async function remove(id: string) {
+    if (!confirm('Delete this event?')) return;
+    const { error } = await sb.from('team_events').delete().eq('id', id);
+    if (error) { alert(error.message); return; }
+    void load();
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Events</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Games, training and social events for your teams. Parents and players see these on
+            their calendar automatically.
+          </p>
+        </div>
+        <button type="button" className="btn-primary text-sm" onClick={() => setPickerOpen(true)}>
+          + Add Event
+        </button>
+      </div>
+
+      <div className="mt-4 overflow-x-auto rounded border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+            <tr>
+              <th className="px-3 py-2">When</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Team</th>
+              <th className="px-3 py-2">Title</th>
+              <th className="px-3 py-2">Venue</th>
+              <th className="px-3 py-2" />
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+            ) : rows.length === 0 ? (
+              <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-500">No upcoming events. Click "+ Add Event" to create one.</td></tr>
+            ) : (
+              rows.map((r) => {
+                const d = new Date(r.starts_at);
+                const dateStr = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                const timeStr = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+                const meta = KIND_META[r.kind];
+                return (
+                  <tr key={r.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className="whitespace-nowrap px-3 py-2">
+                      <div className="font-semibold text-navy">{dateStr}</div>
+                      <div className="text-xs text-slate-500">{timeStr}</div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${meta.badge}`}>
+                        {meta.icon} {meta.label}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-700">{teamName(r.team_id)}</td>
+                    <td className="px-3 py-2 font-medium text-slate-800">
+                      {r.title}
+                      {r.kind === 'game' && r.opponent && (
+                        <span className="ml-2 text-xs text-slate-500">
+                          vs {r.opponent}{r.home_away ? ` · ${r.home_away}` : ''}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-slate-600">{r.location ?? '—'}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button type="button" onClick={() => remove(r.id)} className="text-xs text-red-600 hover:underline">
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {pickerOpen && (
+        <EventTypePicker
+          onSelect={(k) => { setFormKind(k); setPickerOpen(false); }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
+      {formKind && (
+        <EventForm
+          kind={formKind}
+          teams={teams}
+          onSaved={() => { setFormKind(null); void load(); }}
+          onClose={() => setFormKind(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function EventTypePicker({
+  onSelect, onClose,
+}: { onSelect: (k: TeamEventKind) => void; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <div
+        className="w-full max-w-md rounded-lg bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <h3 className="text-lg font-semibold text-navy">Choose Event Type</h3>
+          <button type="button" onClick={onClose} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+        </div>
+        <div className="mt-4 space-y-2">
+          {(Object.keys(KIND_META) as TeamEventKind[]).map((k) => {
+            const meta = KIND_META[k];
+            return (
+              <button
+                key={k}
+                type="button"
+                onClick={() => onSelect(k)}
+                className="flex w-full items-start gap-3 rounded border border-slate-200 p-3 text-left hover:border-navy hover:bg-slate-50"
+              >
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-navy/10 text-xl">
+                  {meta.icon}
+                </span>
+                <div>
+                  <div className="font-semibold text-navy">{meta.label}</div>
+                  <div className="text-xs text-slate-600">{meta.blurb}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EventForm({
+  kind, teams, onSaved, onClose,
+}: {
+  kind: TeamEventKind;
+  teams: TeamOption[];
+  onSaved: () => void;
+  onClose: () => void;
+}) {
+  const sb = getSupabase()!;
+  const meta = KIND_META[kind];
+  const [teamId, setTeamId] = useState(teams[0]?.id ?? '');
+  const [date, setDate] = useState('');
+  const [startTime, setStartTime] = useState('18:00');
+  const [endTime, setEndTime] = useState('19:30');
+  const [title, setTitle] = useState(
+    kind === 'practice' ? 'Training' : kind === 'social' ? 'Team social' : '',
+  );
+  const [location, setLocation] = useState('');
+  const [opponent, setOpponent] = useState('');
+  const [homeAway, setHomeAway] = useState<'Home' | 'Away'>('Home');
+  const [notes, setNotes] = useState('');
+  const [notify, setNotify] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Auto-suggest game title from opponent + home/away.
+  const autoGameTitle = kind === 'game' && opponent
+    ? `${homeAway === 'Home' ? 'vs' : '@'} ${opponent}`
+    : '';
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!teamId || !date || !startTime) return;
+    setBusy(true); setErr(null);
+
+    const startsAt = new Date(`${date}T${startTime}`);
+    const endsAt = endTime ? new Date(`${date}T${endTime}`) : null;
+    const effectiveTitle = (title.trim() || autoGameTitle || meta.label).slice(0, 200);
+
+    const { data, error } = await sb
+      .from('team_events')
+      .insert({
+        team_id: teamId,
+        kind,
+        title: effectiveTitle,
+        starts_at: startsAt.toISOString(),
+        ends_at: endsAt ? endsAt.toISOString() : null,
+        location: location.trim() || null,
+        opponent: kind === 'game' ? (opponent.trim() || null) : null,
+        home_away: kind === 'game' ? homeAway : null,
+        notes: notes.trim() || null,
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (error) { setErr(error.message); setBusy(false); return; }
+
+    // Best-effort: record notification intent. Fan-out worker (email / push /
+    // WhatsApp) will pick this up later. Failure here is non-blocking.
+    if (notify && data?.id) {
+      const { error: notifyErr } = await sb
+        .from('event_notifications')
+        .insert({ event_id: data.id, status: 'pending' });
+      if (notifyErr) console.warn('[event_notifications insert]', notifyErr.message);
+    }
+
+    setBusy(false);
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={onClose}>
+      <form
+        onSubmit={save}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg space-y-4 rounded-lg bg-white p-5 shadow-xl"
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <div className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${meta.badge}`}>
+              {meta.icon} {meta.label}
+            </div>
+            <h3 className="mt-1 text-lg font-semibold text-navy">New {meta.label}</h3>
+          </div>
+          <button type="button" onClick={onClose} className="text-2xl leading-none text-slate-400 hover:text-slate-700">×</button>
+        </div>
+
+        <label className="block text-sm">
+          <span className="text-xs font-semibold text-slate-600">Team</span>
+          <select required value={teamId} onChange={(e) => setTeamId(e.target.value)} className="input mt-1">
+            <option value="">Select a team…</option>
+            {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </label>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="block text-sm">
+            <span className="text-xs font-semibold text-slate-600">Date</span>
+            <input type="date" required value={date} onChange={(e) => setDate(e.target.value)} className="input mt-1" />
+          </label>
+          <label className="block text-sm">
+            <span className="text-xs font-semibold text-slate-600">Start</span>
+            <input type="time" required value={startTime} onChange={(e) => setStartTime(e.target.value)} className="input mt-1" />
+          </label>
+          <label className="block text-sm">
+            <span className="text-xs font-semibold text-slate-600">End</span>
+            <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="input mt-1" />
+          </label>
+        </div>
+
+        {kind === 'game' && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-slate-600">Opponent</span>
+              <input value={opponent} onChange={(e) => setOpponent(e.target.value)} className="input mt-1" placeholder="e.g. Paget FC" />
+            </label>
+            <label className="block text-sm">
+              <span className="text-xs font-semibold text-slate-600">Home / Away</span>
+              <select value={homeAway} onChange={(e) => setHomeAway(e.target.value as 'Home' | 'Away')} className="input mt-1">
+                <option value="Home">Home</option>
+                <option value="Away">Away</option>
+              </select>
+            </label>
+          </div>
+        )}
+
+        <label className="block text-sm">
+          <span className="text-xs font-semibold text-slate-600">
+            Title {kind === 'game' && autoGameTitle && <span className="text-slate-400">(auto: {autoGameTitle})</span>}
+          </span>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="input mt-1"
+            placeholder={autoGameTitle || `${meta.label} title`}
+          />
+        </label>
+
+        <label className="block text-sm">
+          <span className="text-xs font-semibold text-slate-600">Venue</span>
+          <input
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="input mt-1"
+            placeholder="e.g. WFA Pitch 1, National Sports Centre"
+          />
+        </label>
+
+        <label className="block text-sm">
+          <span className="text-xs font-semibold text-slate-600">Notes</span>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="input mt-1"
+            rows={2}
+            placeholder="Arrive 30 mins early, wear away kit, etc."
+          />
+        </label>
+
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+          Notify players and parents on save
+        </label>
+
+        {err && <p className="text-sm text-red-700">{err}</p>}
+
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-sm" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary text-sm" disabled={busy}>
+            {busy ? 'Saving…' : 'Save event'}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
