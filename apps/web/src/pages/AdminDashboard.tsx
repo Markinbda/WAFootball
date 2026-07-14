@@ -1568,23 +1568,32 @@ function GroupRow({
           {node.short_code ?? node.kind.replace('_', ' ').split(' ').map((s) => s[0]).join('')}
         </span>
         <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={() => hasChildren && toggle(node.id)}
-            className="block w-full text-left"
-          >
-            <div className="truncate font-semibold text-navy">
-              {node.name}
-              {hasChildren && (
-                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
-                  {node.children.length}
-                </span>
-              )}
-            </div>
-            <div className="text-xs capitalize text-slate-500">
-              {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
-            </div>
-          </button>
+          {node.kind === 'team' && node.team_slug ? (
+            <Link to={`/teams/${node.team_slug}`} className="block w-full text-left hover:underline">
+              <div className="truncate font-semibold text-navy">{node.name}</div>
+              <div className="text-xs capitalize text-slate-500">
+                {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
+              </div>
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => hasChildren && toggle(node.id)}
+              className="block w-full text-left"
+            >
+              <div className="truncate font-semibold text-navy">
+                {node.name}
+                {hasChildren && (
+                  <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                    {node.children.length}
+                  </span>
+                )}
+              </div>
+              <div className="text-xs capitalize text-slate-500">
+                {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
+              </div>
+            </button>
+          )}
         </div>
         <button
           className="text-xs text-slate-600 hover:text-navy hover:underline"

@@ -24,6 +24,7 @@ export type Group = {
   name: string;
   kind: GroupKind;
   team_id: string | null;
+  team_slug: string | null;
   slug: string | null;
   short_code: string | null;
   color: string | null;
@@ -136,11 +137,16 @@ export function useGroupTree() {
     try {
       const { data, error } = await sb
         .from('groups')
-        .select('*')
+        .select('*, teams(slug)')
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
       if (error) console.error('[useGroupTree]', error);
-      setFlat((data ?? []) as Group[]);
+      type Row = Omit<Group, 'team_slug'> & { teams?: { slug: string | null } | null };
+      const mapped: Group[] = ((data ?? []) as unknown as Row[]).map((r) => {
+        const { teams, ...rest } = r;
+        return { ...rest, team_slug: teams?.slug ?? null } as Group;
+      });
+      setFlat(mapped);
     } catch (e) {
       console.error('[useGroupTree] threw', e);
       setFlat([]);
