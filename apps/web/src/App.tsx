@@ -25,6 +25,7 @@ import { History } from './pages/History';
 import { Register } from './pages/Register';
 import { RegistrationWizard } from './pages/RegistrationWizard';
 import { TeamCalendar } from './pages/TeamCalendar';
+import { MyCalendar } from './pages/MyCalendar';
 import { Attendance, AttendanceEvent } from './pages/Attendance';
 import { NotFound } from './pages/NotFound';
 import { RequireAuth } from './auth/RequireAuth';
@@ -55,6 +56,14 @@ export default function App() {
           element={
             <RequireAuth>
               <TeamCalendar />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="my-calendar"
+          element={
+            <RequireAuth>
+              <MyCalendar />
             </RequireAuth>
           }
         />

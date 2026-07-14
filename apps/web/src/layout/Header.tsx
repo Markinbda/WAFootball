@@ -165,6 +165,16 @@ export function Header() {
         <div className="flex items-center gap-2">
           {user ? (
             <>
+              <NavLink
+                to="/my-calendar"
+                className={({ isActive }) =>
+                  `hidden rounded px-3 py-1.5 text-xs font-semibold sm:inline-block ${
+                    isActive ? 'bg-white text-navy' : 'border border-white/30 text-white hover:bg-white/10'
+                  }`
+                }
+              >
+                My Calendar
+              </NavLink>
               <span className="hidden text-xs text-white/80 sm:inline">{user.email}</span>
               <button
                 onClick={() => signOut()}
