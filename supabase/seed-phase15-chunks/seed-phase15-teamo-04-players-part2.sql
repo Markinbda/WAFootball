@@ -5950,7 +5950,7 @@ insert into public.players (
 values (
   '69b4564d-d655-5230-8807-2998988cbfcc',
   'ceb5095d-934e-528f-9586-8438fb95180d',
-  'ben o'''connell',
+  'ben o''connell',
   null,
   null,
   '2015-05-05',
@@ -6010,7 +6010,7 @@ insert into public.players (
 values (
   '4352ec85-4b7b-5521-8e25-35ccfe7e310f',
   'd54156e1-d5f0-52db-a6c2-128299971aca',
-  'Sagely O'''Flynn',
+  'Sagely O''Flynn',
   null,
   null,
   '2012-06-20',
@@ -6070,7 +6070,7 @@ insert into public.players (
 values (
   'dc0a7ce9-6ba3-544a-ab75-24acc0696956',
   'd429f04b-ccfe-5075-95b2-8025c5579420',
-  'Kate O'''HANLON',
+  'Kate O''HANLON',
   null,
   null,
   '2014-12-19',
@@ -6130,7 +6130,7 @@ insert into public.players (
 values (
   'cbaf5661-2631-5223-bffd-b72a23504f81',
   'a265ab6e-aa9c-5bc5-a189-ae823209d9d3',
-  'Liam O'''Shea',
+  'Liam O''Shea',
   null,
   null,
   '2019-12-02',
@@ -14230,7 +14230,7 @@ insert into public.players (
 values (
   '026ca572-acc7-5b6d-a9ef-8055126c58e3',
   '6a206973-9b48-5779-830a-7e9c58c1c367',
-  'JAH''' ZION TAYLOR',
+  'JAH'' ZION TAYLOR',
   null,
   null,
   '2008-09-24',

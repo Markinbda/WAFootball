@@ -3973,7 +3973,7 @@ insert into public.players (
 values (
   'db5cac0a-5f58-5578-a0dd-75eb6a91de98',
   '13996698-0676-530d-b767-bf32d51648cb',
-  'D'''Ari Coddington',
+  'D''Ari Coddington',
   null,
   null,
   '2008-03-12',
@@ -9253,7 +9253,7 @@ insert into public.players (
 values (
   'ef9fda9a-b1f9-592b-973b-dd7086b1fa09',
   '85848519-a741-5999-8633-31d5fe0bfd54',
-  'Ky'''Lah Gibbons',
+  'Ky''Lah Gibbons',
   null,
   null,
   '2018-11-18',
@@ -12733,7 +12733,7 @@ insert into public.players (
 values (
   'db4d7107-4211-57ce-9ba5-4213313c4a21',
   'd54156e1-d5f0-52db-a6c2-128299971aca',
-  'Ja'''Zhari Ingham',
+  'Ja''Zhari Ingham',
   null,
   null,
   '2011-08-08',

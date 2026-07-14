@@ -85,7 +85,10 @@ function uuidFor(kind, key) {
 // ---------------------------------------------------------------------------
 const sqlStr = (v) => {
   if (v === null || v === undefined || v === '') return 'null';
-  return "'" + String(v).replace(/'/g, "''").replace(/\\'/g, "''") + "'";
+  // Teamo's CSV export writes literal `\'` inside some names (D\'Ari,
+  // Ky\'Lah, Ja\'Zhari). Strip the backslash first — otherwise the
+  // subsequent apostrophe-doubling produces `'''` and breaks the SQL literal.
+  return "'" + String(v).replace(/\\'/g, "'").replace(/'/g, "''") + "'";
 };
 const sqlBool = (v) => v ? 'true' : 'false';
 const sqlInt  = (v) => {

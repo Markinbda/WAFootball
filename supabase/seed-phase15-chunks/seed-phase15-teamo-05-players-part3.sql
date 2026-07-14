@@ -490,7 +490,7 @@ insert into public.players (
 values (
   '4f96f59c-587e-5426-a547-84191b800f30',
   'b4dd8004-bf90-5284-8d50-4e9857519b35',
-  'G'''ary Trott-Brangman',
+  'G''ary Trott-Brangman',
   null,
   null,
   '2018-03-27',

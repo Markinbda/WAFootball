@@ -4398,7 +4398,7 @@ insert into public.players (
 values (
   'db5cac0a-5f58-5578-a0dd-75eb6a91de98',
   '13996698-0676-530d-b767-bf32d51648cb',
-  'D'''Ari Coddington',
+  'D''Ari Coddington',
   null,
   null,
   '2008-03-12',
@@ -9678,7 +9678,7 @@ insert into public.players (
 values (
   'ef9fda9a-b1f9-592b-973b-dd7086b1fa09',
   '85848519-a741-5999-8633-31d5fe0bfd54',
-  'Ky'''Lah Gibbons',
+  'Ky''Lah Gibbons',
   null,
   null,
   '2018-11-18',
@@ -13158,7 +13158,7 @@ insert into public.players (
 values (
   'db4d7107-4211-57ce-9ba5-4213313c4a21',
   'd54156e1-d5f0-52db-a6c2-128299971aca',
-  'Ja'''Zhari Ingham',
+  'Ja''Zhari Ingham',
   null,
   null,
   '2011-08-08',
@@ -20838,7 +20838,7 @@ insert into public.players (
 values (
   '69b4564d-d655-5230-8807-2998988cbfcc',
   'ceb5095d-934e-528f-9586-8438fb95180d',
-  'ben o'''connell',
+  'ben o''connell',
   null,
   null,
   '2015-05-05',
@@ -20898,7 +20898,7 @@ insert into public.players (
 values (
   '4352ec85-4b7b-5521-8e25-35ccfe7e310f',
   'd54156e1-d5f0-52db-a6c2-128299971aca',
-  'Sagely O'''Flynn',
+  'Sagely O''Flynn',
   null,
   null,
   '2012-06-20',
@@ -20958,7 +20958,7 @@ insert into public.players (
 values (
   'dc0a7ce9-6ba3-544a-ab75-24acc0696956',
   'd429f04b-ccfe-5075-95b2-8025c5579420',
-  'Kate O'''HANLON',
+  'Kate O''HANLON',
   null,
   null,
   '2014-12-19',
@@ -21018,7 +21018,7 @@ insert into public.players (
 values (
   'cbaf5661-2631-5223-bffd-b72a23504f81',
   'a265ab6e-aa9c-5bc5-a189-ae823209d9d3',
-  'Liam O'''Shea',
+  'Liam O''Shea',
   null,
   null,
   '2019-12-02',
@@ -29118,7 +29118,7 @@ insert into public.players (
 values (
   '026ca572-acc7-5b6d-a9ef-8055126c58e3',
   '6a206973-9b48-5779-830a-7e9c58c1c367',
-  'JAH''' ZION TAYLOR',
+  'JAH'' ZION TAYLOR',
   null,
   null,
   '2008-09-24',
@@ -29898,7 +29898,7 @@ insert into public.players (
 values (
   '4f96f59c-587e-5426-a547-84191b800f30',
   'b4dd8004-bf90-5284-8d50-4e9857519b35',
-  'G'''ary Trott-Brangman',
+  'G''ary Trott-Brangman',
   null,
   null,
   '2018-03-27',
@@ -37023,7 +37023,7 @@ on conflict (id) do update set
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('233ad4b8-07f1-55f4-ad9d-23e3f434d0fd', 'db5cac0a-5f58-5578-a0dd-75eb6a91de98', null, 'parent', 'D'''Shante Coddington', 'dshante@live.com', '14417772716')
+values ('233ad4b8-07f1-55f4-ad9d-23e3f434d0fd', 'db5cac0a-5f58-5578-a0dd-75eb6a91de98', null, 'parent', 'D''Shante Coddington', 'dshante@live.com', '14417772716')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
@@ -39438,28 +39438,28 @@ on conflict (id) do update set
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('adfb7a24-bd29-5693-bff6-a300f9d2d559', '4352ec85-4b7b-5521-8e25-35ccfe7e310f', null, 'parent', 'Stephen O'''Flynn', 'soflynn11@hotmail.com', '14413383010')
+values ('adfb7a24-bd29-5693-bff6-a300f9d2d559', '4352ec85-4b7b-5521-8e25-35ccfe7e310f', null, 'parent', 'Stephen O''Flynn', 'soflynn11@hotmail.com', '14413383010')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('f2164ba6-22e0-5535-8c02-2622a77c0001', 'dc0a7ce9-6ba3-544a-ab75-24acc0696956', null, 'parent', 'Deirdre O'''Hanlon', 'deirdrepmccaul@hotmail.com', '14415995014')
+values ('f2164ba6-22e0-5535-8c02-2622a77c0001', 'dc0a7ce9-6ba3-544a-ab75-24acc0696956', null, 'parent', 'Deirdre O''Hanlon', 'deirdrepmccaul@hotmail.com', '14415995014')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('4fb2e498-97c3-5711-b08e-a06e3657b2cc', 'dc0a7ce9-6ba3-544a-ab75-24acc0696956', null, 'parent', 'Tom O'''Hanlon', 'tomohanlon123@gmail.com', '14415999729')
+values ('4fb2e498-97c3-5711-b08e-a06e3657b2cc', 'dc0a7ce9-6ba3-544a-ab75-24acc0696956', null, 'parent', 'Tom O''Hanlon', 'tomohanlon123@gmail.com', '14415999729')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('9b780993-98f9-5eb3-a219-22928a383ece', 'cbaf5661-2631-5223-bffd-b72a23504f81', null, 'parent', 'Alexander O'''Shea', 'alexoshea1@hotmail.co.uk', '14417052748')
+values ('9b780993-98f9-5eb3-a219-22928a383ece', 'cbaf5661-2631-5223-bffd-b72a23504f81', null, 'parent', 'Alexander O''Shea', 'alexoshea1@hotmail.co.uk', '14417052748')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
@@ -40397,7 +40397,7 @@ on conflict (id) do update set
   guardian_phone = excluded.guardian_phone,
   relationship = excluded.relationship;
 insert into public.player_guardians (id, player_id, user_id, relationship, guardian_name, guardian_email, guardian_phone)
-values ('09af821d-209d-5532-a135-2efe4056474b', 'deb7f292-f34a-5510-be7c-c1168706f643', null, 'parent', 'Yahnee''' Smith', 'yahnee.smith@gmail.com', '14413321900')
+values ('09af821d-209d-5532-a135-2efe4056474b', 'deb7f292-f34a-5510-be7c-c1168706f643', null, 'parent', 'Yahnee'' Smith', 'yahnee.smith@gmail.com', '14413321900')
 on conflict (id) do update set
   guardian_name = excluded.guardian_name,
   guardian_email = excluded.guardian_email,
