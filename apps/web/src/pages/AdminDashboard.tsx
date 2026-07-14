@@ -3,14 +3,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePlayers } from '@/data/phase3';
+import { useGroupTree, type GroupNode, type GroupKind } from '@/data/phase15';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'fixture' | 'players' | 'teams' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'fixture' | 'registrations' | 'players' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'fixture', 'players', 'teams', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'players', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
-  const { roles } = useAuth();
+  const { ready, roles } = useAuth();
   const sb = getSupabase();
   const isAdmin = roles.includes('admin');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -18,25 +19,33 @@ export function AdminDashboard() {
   const [teams, setTeams] = useState<TeamOption[]>([]);
   const initialTab = (searchParams.get('section') as AdminTab) ?? 'news';
   const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : 'news');
+  const allowedTabs = useMemo(
+    () => (!ready || isAdmin ? VALID_TABS : VALID_TABS.filter((value) => value !== 'registrations' && value !== 'coaches')),
+    [isAdmin, ready],
+  );
 
   // Sync tab → URL so the section is shareable / back-button friendly.
   useEffect(() => {
-    if (searchParams.get('section') !== tab) {
+    const nextTab = allowedTabs.includes(tab) ? tab : 'news';
+    if (nextTab !== tab) {
+      setTab(nextTab);
+      return;
+    }
+    if (searchParams.get('section') !== nextTab) {
       const next = new URLSearchParams(searchParams);
-      next.set('section', tab);
+      next.set('section', nextTab);
       setSearchParams(next, { replace: true });
     }
-  }, [tab, searchParams, setSearchParams]);
+  }, [allowedTabs, tab, searchParams, setSearchParams]);
 
   // If the URL changes externally (e.g. user clicks a Coach Dashboard tile),
   // reflect that in the active tab.
   useEffect(() => {
     const fromUrl = searchParams.get('section') as AdminTab | null;
-    if (fromUrl && VALID_TABS.includes(fromUrl) && fromUrl !== tab) {
-      setTab(fromUrl);
+    if (fromUrl && allowedTabs.includes(fromUrl)) {
+      setTab((current) => (fromUrl === current ? current : fromUrl));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [allowedTabs, searchParams]);
 
   useEffect(() => {
     if (!sb) return;
@@ -81,11 +90,25 @@ export function AdminDashboard() {
         >
           Players
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => setTab('registrations')}
+            className={`px-4 py-2 text-sm font-semibold ${tab === 'registrations' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+          >
+            Registrations
+          </button>
+        )}
         <button
           onClick={() => setTab('teams')}
           className={`px-4 py-2 text-sm font-semibold ${tab === 'teams' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
         >
           Team photos
+        </button>
+        <button
+          onClick={() => setTab('groups')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'groups' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Teams &amp; Groups
         </button>
         <button
           onClick={() => setTab('training')}
@@ -118,8 +141,10 @@ export function AdminDashboard() {
       <div className="mt-6">
         {tab === 'news' && <NewsForm />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
+        {tab === 'registrations' && isAdmin && <RegistrationsPanel />}
         {tab === 'players' && <PlayersPanel teams={teams} />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
+        {tab === 'groups' && <GroupsPanel />}
         {tab === 'training' && <TrainingForm teams={teams} />}
         {tab === 'gallery' && <GalleryForm teams={teams} />}
         {tab === 'sponsors' && <SponsorForm />}
@@ -289,6 +314,254 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="mt-1">{children}</div>
     </div>
   );
+}
+
+type RegistrationStatus = 'pending' | 'approved' | 'rejected';
+
+type RegistrationPerson = {
+  firstName?: string;
+  surname?: string;
+  phone?: string;
+  email?: string;
+  street?: string;
+  parish?: string;
+  postcode?: string;
+};
+
+type RegistrationPlayer = {
+  firstName?: string;
+  surname?: string;
+  dob?: string;
+  gender?: string;
+  school?: string;
+  playerEmail?: string;
+  playerPhone?: string;
+  ageGroup?: string;
+  yearsPlaying?: string;
+  previousClubs?: string;
+  jerseySize?: string;
+  shortsSize?: string;
+  physicianName?: string;
+  physicianPhone?: string;
+  allergies?: string;
+  medical?: string;
+};
+
+type RegistrationRow = {
+  id: string;
+  type: 'adult' | 'junior';
+  guardian: RegistrationPerson;
+  players: RegistrationPlayer[];
+  request_message: string | null;
+  status: RegistrationStatus;
+  submitted_at: string;
+  reviewed_at: string | null;
+};
+
+function RegistrationsPanel() {
+  const { session } = useAuth();
+  const [rows, setRows] = useState<RegistrationRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState<string | null>(null);
+  const [filter, setFilter] = useState<RegistrationStatus | 'all'>('pending');
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+  async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12000);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeout);
+    }
+  }
+
+  function authHeaders() {
+    return {
+      apikey: anonKey,
+      Authorization: `Bearer ${session?.access_token ?? anonKey}`,
+      'Content-Type': 'application/json',
+    };
+  }
+
+  async function load() {
+    if (!session?.access_token) {
+      setLoading(false);
+      setRows([]);
+      setStatus('Please sign in as an admin to view registrations.');
+      return;
+    }
+    setLoading(true);
+    setStatus(null);
+    try {
+      const params = new URLSearchParams({
+        select: 'id,type,guardian,players,request_message,status,submitted_at,reviewed_at',
+        order: 'submitted_at.desc',
+      });
+      const response = await fetchWithTimeout(`${supabaseUrl}/rest/v1/online_registrations?${params}`, {
+        headers: authHeaders(),
+      });
+      if (!response.ok) {
+        const message = await response.text();
+        setStatus(`Error loading registrations: ${message || response.statusText}`);
+        setRows([]);
+        return;
+      }
+      const data = await response.json();
+      setRows((data ?? []) as RegistrationRow[]);
+    } catch {
+      setStatus('Error loading registrations.');
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.access_token]);
+
+  const filteredRows = useMemo(() => {
+    if (filter === 'all') return rows;
+    return rows.filter((row) => row.status === filter);
+  }, [filter, rows]);
+
+  async function approve(row: RegistrationRow) {
+    setBusyId(row.id);
+    setStatus(null);
+    try {
+      const response = await fetchWithTimeout(`${supabaseUrl}/functions/v1/invite-coach`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          mode: 'approve_registration',
+          registration_id: row.id,
+          redirect_to: `${window.location.origin}/login`,
+        }),
+      });
+      let result: { ok?: boolean; error?: string; email_sent?: boolean; email_note?: string | null } = {};
+      try {
+        result = await response.json();
+      } catch {
+        result = { error: await response.text().catch(() => response.statusText) };
+      }
+      if (!response.ok) {
+        setStatus(`Error approving registration: ${result.error || response.statusText}`);
+        return;
+      }
+      setStatus(result.email_sent ? 'Registration approved and email sent.' : `Registration approved. ${result.email_note ?? 'No email was sent.'}`);
+      await load();
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const pendingCount = rows.filter((row) => row.status === 'pending').length;
+
+  return (
+    <div className="space-y-6">
+      <div className="card p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold">Online registrations</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              {loading ? 'Loading…' : `${pendingCount} pending approval, ${rows.length} total`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)} className="input w-40">
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+              <option value="all">All</option>
+            </select>
+            <button type="button" onClick={load} className="btn-ghost">Refresh</button>
+          </div>
+        </div>
+
+        {status && (
+          <p className={`mt-4 text-sm ${status.startsWith('Error') ? 'text-red-700' : 'text-pitch'}`}>
+            {status}
+          </p>
+        )}
+
+        {!loading && filteredRows.length === 0 && (
+          <p className="mt-5 text-sm text-slate-500">No registrations in this view.</p>
+        )}
+
+        <ul className="mt-5 space-y-4">
+          {filteredRows.map((row) => (
+            <li key={row.id} className="rounded-lg border border-slate-200 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-lg font-semibold text-navy">
+                      {row.type === 'adult' ? fullName(row.players[0]) : fullName(row.guardian)}
+                    </h3>
+                    <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-semibold uppercase text-slate-600">
+                      {row.type}
+                    </span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-semibold uppercase ${row.status === 'approved' ? 'bg-pitch/10 text-pitch' : 'bg-amber-100 text-amber-800'}`}>
+                      {row.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Submitted {new Date(row.submitted_at).toLocaleString()}
+                    {row.reviewed_at ? ` · Reviewed ${new Date(row.reviewed_at).toLocaleString()}` : ''}
+                  </p>
+                </div>
+                <button type="button" onClick={() => approve(row)} className="btn-primary" disabled={busyId === row.id}>
+                  {busyId === row.id ? (row.status === 'approved' ? 'Sending…' : 'Approving…') : (row.status === 'approved' ? 'Send email' : 'Approve')}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <div className="rounded border border-slate-100 bg-slate-50 p-3 text-sm">
+                  <div className="font-semibold text-navy">Contact</div>
+                  <div className="mt-1 text-slate-700">{fullName(row.guardian)}</div>
+                  <div className="text-slate-700">{row.guardian.email || 'No email'}</div>
+                  <div className="text-slate-700">{row.guardian.phone || 'No phone'}</div>
+                  <div className="text-slate-500">{address(row.guardian)}</div>
+                </div>
+                <div className="space-y-3 lg:col-span-2">
+                  {row.players.map((player, index) => (
+                    <div key={`${row.id}-${index}`} className="rounded border border-slate-100 p-3 text-sm">
+                      <div className="font-semibold text-navy">{fullName(player)}</div>
+                      <div className="text-slate-700">{player.ageGroup || 'No age group'} · DOB {player.dob || 'not provided'} · {player.gender || 'gender not provided'}</div>
+                      <div className="text-slate-700">Kit: {player.jerseySize || 'n/a'} jersey, {player.shortsSize || 'n/a'} shorts</div>
+                      <div className="text-slate-700">Physician: {player.physicianName || 'n/a'} {player.physicianPhone ? `(${player.physicianPhone})` : ''}</div>
+                      {(player.allergies || player.medical) && (
+                        <div className="text-slate-700">Medical: {player.allergies || 'No allergies listed'}; {player.medical || 'No conditions listed'}</div>
+                      )}
+                      {player.previousClubs && <div className="text-slate-700">Previous clubs: {player.previousClubs}</div>}
+                      {player.school && <div className="text-slate-700">School: {player.school}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {row.request_message && (
+                <p className="mt-3 rounded bg-amber-50 p-3 text-sm text-amber-900">{row.request_message}</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+function fullName(person?: { firstName?: string; surname?: string }) {
+  const name = [person?.firstName, person?.surname].filter(Boolean).join(' ');
+  return name || 'Unnamed registration';
+}
+
+function address(person: RegistrationPerson) {
+  const value = [person.street, person.parish, person.postcode].filter(Boolean).join(', ');
+  return value || 'No address provided';
 }
 
 function PlayersPanel({ teams }: { teams: TeamOption[] }) {
@@ -1324,3 +1597,229 @@ function EditCoachButton({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// GroupsPanel — Teams & Groups tree (mirrors Teamo's "Edit Teams/Groups")
+// ---------------------------------------------------------------------------
+function GroupsPanel() {
+  const { tree, loading, reload } = useGroupTree();
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Teams &amp; Groups</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Hierarchical structure that mirrors Teamo. Click a node to add sub-groups.
+          </p>
+        </div>
+        <button className="btn-primary text-sm" type="button" onClick={() => setOpenId('__root__')}>
+          + New top-level group
+        </button>
+      </div>
+
+      <input
+        type="search"
+        placeholder="Search teams and groups"
+        className="input mt-4"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+
+      {loading ? (
+        <p className="mt-6 text-sm text-slate-500">Loading…</p>
+      ) : (
+        <ul className="mt-4 space-y-1 text-sm">
+          {tree
+            .filter((n) => filterNode(n, search))
+            .map((n) => (
+              <GroupRow
+                key={n.id}
+                node={n}
+                depth={0}
+                search={search}
+                openId={openId}
+                setOpenId={setOpenId}
+                onChanged={reload}
+              />
+            ))}
+        </ul>
+      )}
+
+      {openId === '__root__' && (
+        <NewGroupForm parentId={null} onClose={() => setOpenId(null)} onSaved={() => { setOpenId(null); void reload(); }} />
+      )}
+    </div>
+  );
+}
+
+function filterNode(n: GroupNode, q: string): boolean {
+  if (!q) return true;
+  if (n.name.toLowerCase().includes(q.toLowerCase())) return true;
+  return n.children.some((c) => filterNode(c, q));
+}
+
+function GroupRow({
+  node, depth, search, openId, setOpenId, onChanged,
+}: {
+  node: GroupNode;
+  depth: number;
+  search: string;
+  openId: string | null;
+  setOpenId: (v: string | null) => void;
+  onChanged: () => void;
+}) {
+  const sb = getSupabase()!;
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    if (!confirm(`Delete "${node.name}" and all descendants?`)) return;
+    setBusy(true);
+    await sb.from('groups').delete().eq('id', node.id);
+    setBusy(false);
+    onChanged();
+  }
+
+  const kindColor: Record<GroupKind, string> = {
+    club:         'bg-navy text-white',
+    club_section: 'bg-slate-800 text-white',
+    registration: 'bg-slate-500 text-white',
+    sub_section:  'bg-slate-300 text-slate-800',
+    team:         'bg-gold text-navy',
+  };
+
+  return (
+    <li>
+      <div
+        className="flex items-center gap-3 rounded border border-slate-100 bg-white p-2 hover:bg-slate-50"
+        style={{ paddingLeft: 8 + depth * 24 }}
+      >
+        <span className={`grid h-8 w-10 place-items-center rounded text-[10px] font-bold uppercase ${kindColor[node.kind]}`}>
+          {node.short_code ?? node.kind.replace('_', ' ').split(' ').map((s) => s[0]).join('')}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-semibold text-navy">{node.name}</div>
+          <div className="text-xs capitalize text-slate-500">
+            {node.kind.replace('_', ' ')}{node.team_id ? ' · linked team' : ''}
+          </div>
+        </div>
+        <button
+          className="text-xs text-slate-600 hover:text-navy hover:underline"
+          type="button"
+          onClick={() => setOpenId(openId === node.id ? null : node.id)}
+        >
+          + Add child
+        </button>
+        <button
+          className="text-xs text-red-600 hover:underline disabled:opacity-50"
+          type="button"
+          onClick={remove}
+          disabled={busy}
+        >
+          Delete
+        </button>
+      </div>
+
+      {openId === node.id && (
+        <div style={{ paddingLeft: 8 + (depth + 1) * 24 }}>
+          <NewGroupForm
+            parentId={node.id}
+            onClose={() => setOpenId(null)}
+            onSaved={() => { setOpenId(null); onChanged(); }}
+          />
+        </div>
+      )}
+
+      {node.children.length > 0 && (
+        <ul className="mt-1 space-y-1">
+          {node.children
+            .filter((c) => filterNode(c, search))
+            .map((c) => (
+              <GroupRow
+                key={c.id}
+                node={c}
+                depth={depth + 1}
+                search={search}
+                openId={openId}
+                setOpenId={setOpenId}
+                onChanged={onChanged}
+              />
+            ))}
+        </ul>
+      )}
+    </li>
+  );
+}
+
+function NewGroupForm({
+  parentId, onClose, onSaved,
+}: { parentId: string | null; onClose: () => void; onSaved: () => void }) {
+  const sb = getSupabase()!;
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<GroupKind>(parentId ? 'sub_section' : 'club_section');
+  const [teamId, setTeamId] = useState('');
+  const [teams, setTeams] = useState<TeamOption[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await sb.from('teams').select('id, name').order('name');
+      if (data) setTeams(data);
+    })();
+  }, [sb]);
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true); setErr(null);
+    const payload: Record<string, unknown> = {
+      parent_id: parentId,
+      name,
+      kind,
+      team_id: kind === 'team' ? teamId || null : null,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    };
+    const { error } = await sb.from('groups').insert(payload);
+    setBusy(false);
+    if (error) setErr(error.message);
+    else onSaved();
+  }
+
+  return (
+    <form onSubmit={save} className="my-3 space-y-3 rounded border border-slate-200 bg-slate-50 p-3 text-sm">
+      <div className="grid gap-3 md:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-600">Name</span>
+          <input required className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="text-xs font-semibold text-slate-600">Type</span>
+          <select className="input mt-1" value={kind} onChange={(e) => setKind(e.target.value as GroupKind)}>
+            <option value="club_section">Club Section</option>
+            <option value="registration">Registration</option>
+            <option value="sub_section">Sub-section</option>
+            <option value="team">Team pointer</option>
+          </select>
+        </label>
+        {kind === 'team' && (
+          <label className="block md:col-span-2">
+            <span className="text-xs font-semibold text-slate-600">Linked team</span>
+            <select className="input mt-1" required value={teamId} onChange={(e) => setTeamId(e.target.value)}>
+              <option value="">— select —</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      {err && <p className="text-red-700">{err}</p>}
+      <div className="flex gap-2">
+        <button className="btn-primary" disabled={busy} type="submit">{busy ? 'Saving…' : 'Save'}</button>
+        <button className="rounded border border-slate-300 px-3 py-1.5" type="button" onClick={onClose}>Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+
