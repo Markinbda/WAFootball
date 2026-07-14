@@ -389,3 +389,98 @@ export function ageFromDob(dob: string | null | undefined): number | null {
   if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
   return age;
 }
+
+// ---------------------------------------------------------------------------
+// useAllMembers — spreadsheet-style listing of every player with the full
+// set of teams they belong to (from player_teams), for the Admin console
+// Members tab. Ships to the client in a single round trip.
+// ---------------------------------------------------------------------------
+export type MemberRow = {
+  id: string;
+  full_name: string;
+  gender: string | null;
+  date_of_birth: string | null;
+  age: number | null;
+  shirt_number: number | null;
+  position: string | null;
+  member_number: string | null;
+  email: string | null;
+  phone: string | null;
+  family_code: string | null;
+  season_opt_in: 'In' | 'Out' | null;
+  active: boolean;
+  teams: { id: string; name: string; slug: string; is_primary: boolean }[];
+};
+
+export function useAllMembers() {
+  const [rows, setRows] = useState<MemberRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    const sb = getSupabase();
+    if (!sb) { setLoading(false); return; }
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error } = await sb
+        .from('players')
+        .select(`
+          id, full_name, gender, date_of_birth, shirt_number, position,
+          member_number, email, phone, family_code, season_opt_in, active,
+          player_teams (
+            is_primary,
+            teams ( id, name, slug )
+          )
+        `)
+        .order('full_name', { ascending: true });
+      if (error) throw error;
+      type Row = {
+        id: string; full_name: string; gender: string | null;
+        date_of_birth: string | null; shirt_number: number | null;
+        position: string | null; member_number: string | null;
+        email: string | null; phone: string | null; family_code: string | null;
+        season_opt_in: 'In' | 'Out' | null; active: boolean;
+        player_teams?: {
+          is_primary: boolean;
+          teams: { id: string; name: string; slug: string } | null;
+        }[] | null;
+      };
+      const mapped: MemberRow[] = ((data ?? []) as unknown as Row[]).map((r) => ({
+        id: r.id,
+        full_name: r.full_name,
+        gender: r.gender,
+        date_of_birth: r.date_of_birth,
+        age: ageFromDob(r.date_of_birth),
+        shirt_number: r.shirt_number,
+        position: r.position,
+        member_number: r.member_number,
+        email: r.email,
+        phone: r.phone,
+        family_code: r.family_code,
+        season_opt_in: r.season_opt_in,
+        active: r.active,
+        teams: (r.player_teams ?? [])
+          .filter((pt) => pt.teams)
+          .map((pt) => ({
+            id: pt.teams!.id,
+            name: pt.teams!.name,
+            slug: pt.teams!.slug,
+            is_primary: !!pt.is_primary,
+          }))
+          .sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.name.localeCompare(b.name)),
+      }));
+      setRows(mapped);
+    } catch (e) {
+      console.error('[useAllMembers] threw', e);
+      setError(e instanceof Error ? e.message : String(e));
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void reload(); }, [reload]);
+
+  return { rows, loading, error, reload };
+}

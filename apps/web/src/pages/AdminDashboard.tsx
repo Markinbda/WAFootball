@@ -3,12 +3,12 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { usePlayers } from '@/data/phase3';
-import { useGroupTree, type GroupNode, type GroupKind } from '@/data/phase15';
+import { useGroupTree, useAllMembers, type GroupNode, type GroupKind, type MemberRow } from '@/data/phase15';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'fixture' | 'registrations' | 'players' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'news' | 'fixture' | 'registrations' | 'players' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'players', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['news', 'fixture', 'registrations', 'players', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
 
 export function AdminDashboard() {
   const { ready, roles } = useAuth();
@@ -90,6 +90,12 @@ export function AdminDashboard() {
         >
           Players
         </button>
+        <button
+          onClick={() => setTab('members')}
+          className={`px-4 py-2 text-sm font-semibold ${tab === 'members' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
+        >
+          Members
+        </button>
         {isAdmin && (
           <button
             onClick={() => setTab('registrations')}
@@ -143,6 +149,7 @@ export function AdminDashboard() {
         {tab === 'fixture' && <FixtureForm teams={teams} />}
         {tab === 'registrations' && isAdmin && <RegistrationsPanel />}
         {tab === 'players' && <PlayersPanel teams={teams} />}
+        {tab === 'members' && <MembersPanel />}
         {tab === 'teams' && <TeamPhotoForm teams={teams} />}
         {tab === 'groups' && <GroupsPanel />}
         {tab === 'training' && <TrainingForm teams={teams} />}
@@ -1819,6 +1826,223 @@ function NewGroupForm({
         <button className="rounded border border-slate-300 px-3 py-1.5" type="button" onClick={onClose}>Cancel</button>
       </div>
     </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// MembersPanel — full membership list with search, gender & team filters,
+// and a Teams / Groups column that shows every team a player is on.
+// ---------------------------------------------------------------------------
+function MembersPanel() {
+  const { rows, loading, error, reload } = useAllMembers();
+  const [q, setQ] = useState('');
+  const [gender, setGender] = useState<'all' | 'male' | 'female' | 'other'>('all');
+  const [teamFilter, setTeamFilter] = useState<string>('all');
+  const [inactive, setInactive] = useState(false);
+
+  const allTeams = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of rows) {
+      for (const t of r.teams) if (!map.has(t.id)) map.set(t.id, t.name);
+    }
+    return [...map.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([id, name]) => ({ id, name }));
+  }, [rows]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((r) => {
+      if (!inactive && r.active === false) return false;
+      if (gender !== 'all') {
+        const g = (r.gender ?? '').toLowerCase();
+        if (gender === 'other') {
+          if (g === 'male' || g === 'female') return false;
+        } else if (g !== gender) return false;
+      }
+      if (teamFilter !== 'all' && !r.teams.some((t) => t.id === teamFilter)) return false;
+      if (needle) {
+        const hay = [
+          r.full_name, r.email, r.phone, r.member_number, r.family_code,
+          ...r.teams.map((t) => t.name),
+        ].filter(Boolean).join(' ').toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [rows, q, gender, teamFilter, inactive]);
+
+  function exportCsv() {
+    const header = [
+      'Name', 'Gender', 'DoB', 'Age', 'Shirt', 'Position',
+      'Member No', 'Email', 'Phone', 'Family', 'Opt-in', 'Active', 'Teams / Groups',
+    ];
+    const lines = [header.join(',')];
+    for (const r of filtered) {
+      const cells = [
+        r.full_name, r.gender ?? '', r.date_of_birth ?? '', r.age ?? '',
+        r.shirt_number ?? '', r.position ?? '',
+        r.member_number ?? '', r.email ?? '', r.phone ?? '',
+        r.family_code ?? '', r.season_opt_in ?? '', r.active ? 'yes' : 'no',
+        r.teams.map((t) => t.name).join('; '),
+      ].map((v) => {
+        const s = String(v ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+      });
+      lines.push(cells.join(','));
+    }
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `wfa-members-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold">Members</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            {loading ? 'Loading…' : `${filtered.length.toLocaleString()} of ${rows.length.toLocaleString()} shown`}
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" className="rounded border border-slate-300 px-3 py-1.5 text-xs font-semibold" onClick={reload}>
+            Refresh
+          </button>
+          <button type="button" className="rounded bg-navy px-3 py-1.5 text-xs font-semibold text-white" onClick={exportCsv}>
+            Export CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="mt-4 grid gap-3 md:grid-cols-4">
+        <label className="text-sm md:col-span-2">
+          <span className="text-xs font-semibold text-slate-600">Search</span>
+          <input
+            type="search"
+            className="input mt-1"
+            placeholder="Name, email, phone, member #, family code, team…"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </label>
+        <label className="text-sm">
+          <span className="text-xs font-semibold text-slate-600">Gender</span>
+          <select
+            className="input mt-1"
+            value={gender}
+            onChange={(e) => setGender(e.target.value as typeof gender)}
+          >
+            <option value="all">All</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+            <option value="other">Other / unspecified</option>
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="text-xs font-semibold text-slate-600">Team</span>
+          <select
+            className="input mt-1"
+            value={teamFilter}
+            onChange={(e) => setTeamFilter(e.target.value)}
+          >
+            <option value="all">All teams</option>
+            {allTeams.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+        </label>
+        <label className="mt-1 flex items-center gap-2 text-xs font-semibold text-slate-600 md:col-span-4">
+          <input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} />
+          Include inactive members
+        </label>
+      </div>
+
+      {error && (
+        <p className="mt-3 text-sm text-red-700">Error: {error}</p>
+      )}
+
+      {/* Spreadsheet */}
+      <div className="mt-4 overflow-x-auto rounded border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-600">
+            <tr>
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Gender</th>
+              <th className="px-3 py-2">Age</th>
+              <th className="px-3 py-2">Shirt</th>
+              <th className="px-3 py-2">Teams / Groups</th>
+              <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Phone</th>
+              <th className="px-3 py-2">Family</th>
+              <th className="px-3 py-2">Opt-in</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">Loading…</td></tr>
+            ) : filtered.length === 0 ? (
+              <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No matching members.</td></tr>
+            ) : (
+              filtered.map((r) => <MemberRowView key={r.id} r={r} />)
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MemberRowView({ r }: { r: MemberRow }) {
+  return (
+    <tr className="border-t border-slate-100 hover:bg-slate-50">
+      <td className="px-3 py-2 font-semibold text-navy">
+        <Link to={`/players/${r.id}`} className="hover:underline">{r.full_name}</Link>
+        {r.active === false && (
+          <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">inactive</span>
+        )}
+      </td>
+      <td className="px-3 py-2 capitalize text-slate-700">{r.gender ?? '—'}</td>
+      <td className="px-3 py-2 text-slate-700">{r.age ?? '—'}</td>
+      <td className="px-3 py-2 text-slate-700">{r.shirt_number ?? '—'}</td>
+      <td className="px-3 py-2">
+        {r.teams.length === 0 ? (
+          <span className="text-xs text-slate-400">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {r.teams.map((t) => (
+              <Link
+                key={t.id}
+                to={`/teams/${t.slug}`}
+                className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${
+                  t.is_primary ? 'bg-gold text-navy' : 'bg-slate-200 text-slate-700'
+                } hover:brightness-95`}
+                title={t.is_primary ? 'Primary team' : ''}
+              >
+                {t.name}
+              </Link>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="px-3 py-2 text-xs text-slate-600">
+        {r.email ? <a className="hover:underline" href={`mailto:${r.email}`}>{r.email}</a> : '—'}
+      </td>
+      <td className="px-3 py-2 text-xs text-slate-600">
+        {r.phone ? <a className="hover:underline" href={`tel:${r.phone}`}>{r.phone}</a> : '—'}
+      </td>
+      <td className="px-3 py-2 text-xs text-slate-600">{r.family_code ?? '—'}</td>
+      <td className="px-3 py-2">
+        {r.season_opt_in === 'In' && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">In</span>}
+        {r.season_opt_in === 'Out' && <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-red-700">Out</span>}
+        {!r.season_opt_in && <span className="text-xs text-slate-400">—</span>}
+      </td>
+    </tr>
   );
 }
 
