@@ -50,12 +50,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        const { data } = await supabase.auth.getSession();
+        // Race supabase.auth.getSession() against a 3s timeout: some browsers
+        // occasionally hang on the internal navigator.locks call after an auth
+        // refresh in another tab, which would leave RequireAuth stuck on
+        // "Loading…" forever. We'd rather show the app unauthenticated than
+        // block on a lock that never resolves.
+        const sessionPromise: Promise<Session | null> = supabase.auth
+          .getSession()
+          .then((r) => r.data.session ?? null)
+          .catch((e) => { console.error('[AuthProvider getSession] threw', e); return null; });
+        const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000));
+        const s = await Promise.race([sessionPromise, timeout]);
         if (!mounted) return;
-        setSession(data.session);
-        if (data.session?.user) {
-          const r = await fetchRoles(data.session.user.id);
-          if (mounted) setRoles(r);
+        setSession(s);
+        // Kick off roles fetch but do NOT block `ready` on it — if the roles
+        // query stalls the page will still render (RequireAuth may bounce the
+        // user, but that's better than an infinite spinner).
+        if (s?.user) {
+          void fetchRoles(s.user.id).then((r) => {
+            if (mounted) setRoles(r);
+          });
         }
       } catch (e) {
         console.error('[AuthProvider init] threw', e);
