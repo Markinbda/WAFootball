@@ -26,18 +26,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const supabase = getSupabase();
 
-  const fetchRoles = useCallback(async (userId: string): Promise<Role[]> => {
+  // Returns null on error so callers can distinguish "no roles" (empty array)
+  // from "we couldn't check" (null). We must NEVER clobber a good roles array
+  // with an empty one just because a background token refresh had a network
+  // blip — that's what makes the Admin button disappear on navigation.
+  const fetchRoles = useCallback(async (userId: string): Promise<Role[] | null> => {
     if (!supabase) return [];
     try {
       const { data, error } = await supabase
         .from('user_roles')
         .select('role')
         .eq('user_id', userId);
-      if (error || !data) return [];
-      return data.map((r) => r.role as Role);
+      if (error) {
+        console.error('[AuthProvider fetchRoles]', error);
+        return null;
+      }
+      return (data ?? []).map((r) => r.role as Role);
     } catch (e) {
       console.error('[AuthProvider fetchRoles] threw', e);
-      return [];
+      return null;
     }
   }, [supabase]);
 
@@ -50,21 +57,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        // NOTE: we intentionally do NOT race against a short timeout here.
-        // The no-op `lock` in getSupabase() already prevents navigator.locks
-        // deadlocks, and a race was previously causing false-negative
-        // sign-outs on page refresh when storage reads were slow (users got
-        // bounced to /login before the real session hydrated).
-        const { data, error } = await supabase.auth.getSession();
-        if (error) console.error('[AuthProvider getSession]', error);
-        const s = data.session ?? null;
+        // Race getSession against a timeout so a hung storage/auth read
+        // can't strand the entire app on a "Loading…" spinner. If the race
+        // times out, we still set `ready=true` — the eventual
+        // onAuthStateChange('INITIAL_SESSION' | 'SIGNED_IN') callback will
+        // populate the session when the real read completes, so the user
+        // isn't falsely signed out. 8s is generous enough for slow storage
+        // reads but short enough that a genuine hang doesn't strand users.
+        const sessionPromise = supabase.auth.getSession()
+          .then((r) => {
+            if (r.error) console.error('[AuthProvider getSession]', r.error);
+            return r.data.session ?? null;
+          })
+          .catch((e) => { console.error('[AuthProvider getSession threw]', e); return null; });
+        const timeout = new Promise<Session | null>((resolve) => setTimeout(() => {
+          console.warn('[AuthProvider] getSession timed out after 8s — rendering shell, will hydrate via onAuthStateChange');
+          resolve(null);
+        }, 8000));
+        const s = await Promise.race([sessionPromise, timeout]);
         if (!mounted) return;
         setSession(s);
         // Kick off roles fetch but do NOT block `ready` on it — if the roles
         // query stalls the page will still render.
         if (s?.user) {
           void fetchRoles(s.user.id).then((r) => {
-            if (mounted) setRoles(r);
+            if (mounted && r !== null) setRoles(r);
           });
         }
       } catch (e) {
@@ -83,9 +100,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       // Only refresh roles if we have a user (INITIAL_SESSION may carry null
       // even when storage has a session — don't wipe roles in that case).
+      // AND only overwrite roles when fetchRoles returns a definitive
+      // answer (non-null). Otherwise a transient network error during a
+      // TOKEN_REFRESHED event would wipe the Admin button mid-session.
       if (s?.user) {
         const r = await fetchRoles(s.user.id);
-        if (mounted) setRoles(r);
+        if (mounted && r !== null) setRoles(r);
       }
     });
 
