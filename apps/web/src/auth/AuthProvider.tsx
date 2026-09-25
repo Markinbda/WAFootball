@@ -19,6 +19,27 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+const ROLES_CACHE_PREFIX = 'wfa.roles.';
+
+function readCachedRoles(userId: string): Role[] | null {
+  try {
+    const raw = localStorage.getItem(ROLES_CACHE_PREFIX + userId);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as Role[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedRoles(userId: string, roles: Role[]) {
+  try {
+    localStorage.setItem(ROLES_CACHE_PREFIX + userId, JSON.stringify(roles));
+  } catch {
+    // Private-mode / quota — cache is an optimisation only.
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -47,6 +68,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
   }, [supabase]);
+
+  // Hydrate from cache immediately (so the Admin/Coach buttons paint on the
+  // first render), then confirm against the database with a short retry — a
+  // single failed fetch used to leave the UI role-less until a manual refresh.
+  const syncRoles = useCallback(async (userId: string, isMounted: () => boolean) => {
+    const cached = readCachedRoles(userId);
+    if (cached && isMounted()) setRoles(cached);
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const fresh = await fetchRoles(userId);
+      if (!isMounted()) return;
+      if (fresh !== null) {
+        setRoles(fresh);
+        writeCachedRoles(userId, fresh);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }, [fetchRoles]);
 
   useEffect(() => {
     let mounted = true;
@@ -80,9 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Kick off roles fetch but do NOT block `ready` on it — if the roles
         // query stalls the page will still render.
         if (s?.user) {
-          void fetchRoles(s.user.id).then((r) => {
-            if (mounted && r !== null) setRoles(r);
-          });
+          void syncRoles(s.user.id, () => mounted);
         }
       } catch (e) {
         console.error('[AuthProvider init] threw', e);
@@ -96,6 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(s);
       if (event === 'SIGNED_OUT') {
         setRoles([]);
+        try {
+          Object.keys(localStorage)
+            .filter((k) => k.startsWith(ROLES_CACHE_PREFIX))
+            .forEach((k) => localStorage.removeItem(k));
+        } catch {
+          // ignore
+        }
         return;
       }
       // Only refresh roles if we have a user (INITIAL_SESSION may carry null
@@ -104,8 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // answer (non-null). Otherwise a transient network error during a
       // TOKEN_REFRESHED event would wipe the Admin button mid-session.
       if (s?.user) {
-        const r = await fetchRoles(s.user.id);
-        if (mounted && r !== null) setRoles(r);
+        await syncRoles(s.user.id, () => mounted);
       }
     });
 
@@ -113,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
       sub.subscription.unsubscribe();
     };
-  }, [supabase, fetchRoles]);
+  }, [supabase, syncRoles]);
 
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {
