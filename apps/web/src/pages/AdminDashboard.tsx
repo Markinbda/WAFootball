@@ -4,6 +4,7 @@ import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { useGroupTree, useAllMembers, type GroupNode, type GroupKind, type MemberRow } from '@/data/phase15';
 import { useAdminStats } from '@/data/adminStats';
+import { SideNav } from '@/components/SideNav';
 
 type TeamOption = { id: string; name: string };
 type AdminTab = 'overview' | 'news' | 'events' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
@@ -81,12 +82,20 @@ export function AdminDashboard() {
 
   return (
     <div className="w-full lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
-      <AdminSidebar
-        tab={tab}
+      <SideNav
+        title={isAdmin ? 'Club Admin' : 'Coach Admin'}
+        subtitle={session?.user?.email ?? null}
+        items={NAV_ITEMS.filter((item) => allowedTabs.includes(item.tab)).map((item) => ({
+          key: item.tab,
+          label: item.label,
+        }))}
+        active={tab}
         onSelect={setTab}
-        allowedTabs={allowedTabs}
-        email={session?.user?.email ?? null}
-        isAdmin={isAdmin}
+        footer={
+          <Link to="/coach" className="block px-3 py-2 text-sm font-semibold text-slate-600 hover:text-navy">
+            Coach Portal
+          </Link>
+        }
       />
 
       <div className="min-w-0 px-4 py-8 sm:px-6">
@@ -104,64 +113,6 @@ export function AdminDashboard() {
         {tab === 'coaches' && isAdmin && <CoachesForm teams={teams} />}
       </div>
     </div>
-  );
-}
-
-function AdminSidebar({
-  tab,
-  onSelect,
-  allowedTabs,
-  email,
-  isAdmin,
-}: {
-  tab: AdminTab;
-  onSelect: (tab: AdminTab) => void;
-  allowedTabs: AdminTab[];
-  email: string | null;
-  isAdmin: boolean;
-}) {
-  const items = NAV_ITEMS.filter((item) => allowedTabs.includes(item.tab));
-
-  return (
-    <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r">
-      <div className="px-4 py-4">
-        <p className="font-display text-xl uppercase tracking-wide text-navy">
-          {isAdmin ? 'Club Admin' : 'Coach Admin'}
-        </p>
-        {email && <p className="mt-0.5 truncate text-xs text-slate-500">{email}</p>}
-
-        {/* Mobile: the same destinations as a select, so the sidebar doesn't eat the screen. */}
-        <label className="mt-4 block lg:hidden">
-          <span className="sr-only">Admin section</span>
-          <select className="input" value={tab} onChange={(e) => onSelect(e.target.value as AdminTab)}>
-            {items.map((item) => (
-              <option key={item.tab} value={item.tab}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <nav className="mt-4 hidden flex-col gap-1 lg:flex">
-          {items.map((item) => {
-            const active = tab === item.tab;
-            return (
-              <button
-                key={item.tab}
-                type="button"
-                onClick={() => onSelect(item.tab)}
-                aria-current={active ? 'page' : undefined}
-                className={`rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                  active ? 'bg-navy text-white' : 'text-slate-600 hover:bg-navy-50 hover:text-navy'
-                }`}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-    </aside>
   );
 }
 
