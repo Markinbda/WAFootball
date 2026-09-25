@@ -3,21 +3,37 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getSupabase } from '@/lib/supabase';
 import { useAuth } from '@/auth/AuthProvider';
 import { useGroupTree, useAllMembers, type GroupNode, type GroupKind, type MemberRow } from '@/data/phase15';
+import { useAdminStats } from '@/data/adminStats';
 
 type TeamOption = { id: string; name: string };
-type AdminTab = 'news' | 'events' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
+type AdminTab = 'overview' | 'news' | 'events' | 'fixture' | 'registrations' | 'members' | 'teams' | 'groups' | 'training' | 'gallery' | 'sponsors' | 'coaches';
 
-const VALID_TABS: AdminTab[] = ['news', 'events', 'fixture', 'registrations', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
+const VALID_TABS: AdminTab[] = ['overview', 'news', 'events', 'fixture', 'registrations', 'members', 'teams', 'groups', 'training', 'gallery', 'sponsors', 'coaches'];
+
+const NAV_ITEMS: { tab: AdminTab; label: string; adminOnly?: boolean }[] = [
+  { tab: 'overview', label: 'Dashboard' },
+  { tab: 'members', label: 'Members' },
+  { tab: 'registrations', label: 'Registrations', adminOnly: true },
+  { tab: 'groups', label: 'Teams & Groups' },
+  { tab: 'coaches', label: 'Coaches', adminOnly: true },
+  { tab: 'events', label: 'Events' },
+  { tab: 'fixture', label: 'Fixtures & Results' },
+  { tab: 'training', label: 'Training' },
+  { tab: 'news', label: 'News' },
+  { tab: 'gallery', label: 'Gallery' },
+  { tab: 'teams', label: 'Team photos' },
+  { tab: 'sponsors', label: 'Sponsors' },
+];
 
 export function AdminDashboard() {
-  const { ready, roles } = useAuth();
+  const { ready, roles, session } = useAuth();
   const sb = getSupabase();
   const isAdmin = roles.includes('admin');
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const initialTab = (searchParams.get('section') as AdminTab) ?? 'news';
-  const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : 'news');
+  const initialTab = (searchParams.get('section') as AdminTab) ?? 'overview';
+  const [tab, setTab] = useState<AdminTab>(VALID_TABS.includes(initialTab) ? initialTab : 'overview');
   const allowedTabs = useMemo(
     () => (!ready || isAdmin ? VALID_TABS : VALID_TABS.filter((value) => value !== 'registrations' && value !== 'coaches')),
     [isAdmin, ready],
@@ -25,7 +41,7 @@ export function AdminDashboard() {
 
   // Sync tab → URL so the section is shareable / back-button friendly.
   useEffect(() => {
-    const nextTab = allowedTabs.includes(tab) ? tab : 'news';
+    const nextTab = allowedTabs.includes(tab) ? tab : 'overview';
     if (nextTab !== tab) {
       setTab(nextTab);
       return;
@@ -64,86 +80,17 @@ export function AdminDashboard() {
   }
 
   return (
-    <div className="container-page py-12">
-      <h1 className="text-4xl">Admin Console</h1>
-      <p className="mt-2 text-slate-600">
-        {isAdmin ? 'Manage news, fixtures, and results.' : 'Coaches can post fixtures and results.'}
-      </p>
+    <div className="w-full lg:grid lg:grid-cols-[240px_minmax(0,1fr)]">
+      <AdminSidebar
+        tab={tab}
+        onSelect={setTab}
+        allowedTabs={allowedTabs}
+        email={session?.user?.email ?? null}
+        isAdmin={isAdmin}
+      />
 
-      <div className="mt-6 flex gap-2 border-b border-slate-200">
-        <button
-          onClick={() => setTab('news')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'news' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          News
-        </button>
-        <button
-          onClick={() => setTab('events')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'events' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Events
-        </button>
-        <button
-          onClick={() => setTab('fixture')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'fixture' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Fixtures &amp; Results
-        </button>
-        <button
-          onClick={() => setTab('members')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'members' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Members
-        </button>
-        {isAdmin && (
-          <button
-            onClick={() => setTab('registrations')}
-            className={`px-4 py-2 text-sm font-semibold ${tab === 'registrations' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-          >
-            Registrations
-          </button>
-        )}
-        <button
-          onClick={() => setTab('teams')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'teams' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Team photos
-        </button>
-        <button
-          onClick={() => setTab('groups')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'groups' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Teams &amp; Groups
-        </button>
-        <button
-          onClick={() => setTab('training')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'training' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Training
-        </button>
-        <button
-          onClick={() => setTab('gallery')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'gallery' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Gallery
-        </button>
-        <button
-          onClick={() => setTab('sponsors')}
-          className={`px-4 py-2 text-sm font-semibold ${tab === 'sponsors' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-        >
-          Sponsors
-        </button>
-        {isAdmin && (
-          <button
-            onClick={() => setTab('coaches')}
-            className={`px-4 py-2 text-sm font-semibold ${tab === 'coaches' ? 'border-b-2 border-navy text-navy' : 'text-slate-500'}`}
-          >
-            Coaches
-          </button>
-        )}
-      </div>
-
-      <div className="mt-6">
+      <div className="min-w-0 px-4 py-8 sm:px-6">
+        {tab === 'overview' && <AdminOverview onNavigate={setTab} isAdmin={isAdmin} />}
         {tab === 'news' && <NewsForm />}
         {tab === 'events' && <EventsPanel teams={teams} />}
         {tab === 'fixture' && <FixtureForm teams={teams} />}
@@ -157,6 +104,237 @@ export function AdminDashboard() {
         {tab === 'coaches' && isAdmin && <CoachesForm teams={teams} />}
       </div>
     </div>
+  );
+}
+
+function AdminSidebar({
+  tab,
+  onSelect,
+  allowedTabs,
+  email,
+  isAdmin,
+}: {
+  tab: AdminTab;
+  onSelect: (tab: AdminTab) => void;
+  allowedTabs: AdminTab[];
+  email: string | null;
+  isAdmin: boolean;
+}) {
+  const items = NAV_ITEMS.filter((item) => allowedTabs.includes(item.tab));
+
+  return (
+    <aside className="border-b border-slate-200 bg-white lg:sticky lg:top-16 lg:h-[calc(100vh-4rem)] lg:self-start lg:overflow-y-auto lg:border-b-0 lg:border-r">
+      <div className="px-4 py-4">
+        <p className="font-display text-xl uppercase tracking-wide text-navy">
+          {isAdmin ? 'Club Admin' : 'Coach Admin'}
+        </p>
+        {email && <p className="mt-0.5 truncate text-xs text-slate-500">{email}</p>}
+
+        {/* Mobile: the same destinations as a select, so the sidebar doesn't eat the screen. */}
+        <label className="mt-4 block lg:hidden">
+          <span className="sr-only">Admin section</span>
+          <select className="input" value={tab} onChange={(e) => onSelect(e.target.value as AdminTab)}>
+            {items.map((item) => (
+              <option key={item.tab} value={item.tab}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <nav className="mt-4 hidden flex-col gap-1 lg:flex">
+          {items.map((item) => {
+            const active = tab === item.tab;
+            return (
+              <button
+                key={item.tab}
+                type="button"
+                onClick={() => onSelect(item.tab)}
+                aria-current={active ? 'page' : undefined}
+                className={`rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                  active ? 'bg-navy text-white' : 'text-slate-600 hover:bg-navy-50 hover:text-navy'
+                }`}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+    </aside>
+  );
+}
+
+type StatTone = 'neutral' | 'info' | 'warn' | 'danger' | 'good';
+
+const TONE_BORDER: Record<StatTone, string> = {
+  neutral: 'border-l-slate-300',
+  info: 'border-l-navy',
+  good: 'border-l-pitch',
+  warn: 'border-l-gold',
+  danger: 'border-l-red-500',
+};
+
+const TONE_TEXT: Record<StatTone, string> = {
+  neutral: 'text-slate-700',
+  info: 'text-navy',
+  good: 'text-pitch',
+  warn: 'text-amber-700',
+  danger: 'text-red-600',
+};
+
+function StatCard({
+  label,
+  hint,
+  value,
+  tone = 'neutral',
+  onClick,
+}: {
+  label: string;
+  hint?: string;
+  value: number | string;
+  tone?: StatTone;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-sm font-semibold text-slate-700">{label}</p>
+        <p className={`font-display text-3xl leading-none ${TONE_TEXT[tone]}`}>{value}</p>
+      </div>
+      {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+    </>
+  );
+
+  const className = `card border-l-4 p-4 text-left ${TONE_BORDER[tone]}`;
+
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`${className} transition hover:shadow-md`}>
+      {body}
+    </button>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
+function AdminOverview({ onNavigate, isAdmin }: { onNavigate: (tab: AdminTab) => void; isAdmin: boolean }) {
+  const { stats, loading, error, reload } = useAdminStats();
+
+  return (
+    <section>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-4xl">Dashboard</h1>
+          <p className="mt-1 text-slate-600">Membership health at a glance.</p>
+        </div>
+        <button type="button" className="btn btn-ghost" onClick={() => void reload()} disabled={loading}>
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+
+      <div className="card mt-6 p-5">
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Engagement</p>
+        <p className="mt-1 text-sm text-slate-600">
+          <span className="font-display text-3xl text-navy">{stats.engagedMembers}</span>{' '}
+          of {stats.totalMembers} members active in the last 14 days
+        </p>
+        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+          <div className="h-full rounded-full bg-navy" style={{ width: `${stats.engagedPct}%` }} />
+        </div>
+        <p className="mt-1 text-xs text-slate-500">{stats.engagedPct}%</p>
+      </div>
+
+      <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <StatCard
+          label="Total Members"
+          hint={`${stats.activeMembers} active`}
+          value={stats.totalMembers}
+          tone="info"
+          onClick={() => onNavigate('members')}
+        />
+        <StatCard
+          label="Inactive Members"
+          hint="Marked inactive on their profile"
+          value={stats.inactiveMembers}
+          tone={stats.inactiveMembers ? 'warn' : 'good'}
+          onClick={() => onNavigate('members')}
+        />
+        {isAdmin && (
+          <StatCard
+            label="Waiting Room"
+            hint="Registrations pending approval"
+            value={stats.waitingRoom}
+            tone={stats.waitingRoom ? 'danger' : 'good'}
+            onClick={() => onNavigate('registrations')}
+          />
+        )}
+        <StatCard
+          label="Players Not in Team"
+          hint="Waiting to be assigned a team"
+          value={stats.playersNotInTeam}
+          tone={stats.playersNotInTeam ? 'warn' : 'good'}
+          onClick={() => onNavigate('groups')}
+        />
+        <StatCard
+          label="No Group"
+          hint="Not reachable through any group"
+          value={stats.noGroup}
+          tone={stats.noGroup ? 'warn' : 'good'}
+          onClick={() => onNavigate('groups')}
+        />
+        <StatCard
+          label="Guardians"
+          hint="Guardian links on file"
+          value={stats.guardians}
+          tone="info"
+          onClick={() => onNavigate('members')}
+        />
+        <StatCard
+          label="Players Without Guardian"
+          hint="No guardian linked to the player"
+          value={stats.playersWithoutGuardian}
+          tone={stats.playersWithoutGuardian ? 'warn' : 'good'}
+          onClick={() => onNavigate('members')}
+        />
+        <StatCard
+          label="Coaches"
+          hint="Assigned to at least one team"
+          value={stats.coaches}
+          tone="info"
+          onClick={() => onNavigate(isAdmin ? 'coaches' : 'groups')}
+        />
+        <StatCard
+          label="Teams & Groups"
+          hint={`${stats.teams} teams · ${stats.groups} groups`}
+          value={stats.teams}
+          tone="neutral"
+          onClick={() => onNavigate('groups')}
+        />
+        <StatCard
+          label="Age-group Cut-off"
+          hint="Older than their team's age band"
+          value={stats.ageGroupOutliers}
+          tone={stats.ageGroupOutliers ? 'warn' : 'good'}
+          onClick={() => onNavigate('members')}
+        />
+        <StatCard
+          label="Missing Date of Birth"
+          hint="Blocks age-group checks"
+          value={stats.missingDob}
+          tone={stats.missingDob ? 'warn' : 'good'}
+          onClick={() => onNavigate('members')}
+        />
+        <StatCard
+          label="Opted Out This Season"
+          hint="Season opt-in set to Out"
+          value={stats.optedOut}
+          tone="neutral"
+          onClick={() => onNavigate('members')}
+        />
+      </div>
+    </section>
   );
 }
 
